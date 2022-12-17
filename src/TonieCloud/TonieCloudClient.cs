@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 
@@ -23,6 +24,9 @@ namespace TonieCloud
         private readonly Login login;
         private readonly HttpClient client;
         private readonly JsonSerializerSettings jsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+        private readonly SemaphoreSlim _Semaphore = new SemaphoreSlim(initialCount: 3, maxCount: 3);
+        private long _BytesToDo;
+        private long _BytesDone;
 
         public TonieCloudClient(Login login)
         {
@@ -44,29 +48,51 @@ namespace TonieCloud
 
         public async Task<AmazonToken> UploadFile(Stream file)
         {
-            // get upload token
-            var amazonFile = await Post<AmazonToken>("/v2/file", new ByteArrayContent(new byte[] { }));
-
-            // create payload
-            var payload = new MultipartContent("form-data");
-            payload.AddFormContent("key", amazonFile.Request.Fields.Key);
-            payload.AddFormContent("x-amz-algorithm", amazonFile.Request.Fields.AmazonAlgorithm);
-            payload.AddFormContent("x-amz-credential", amazonFile.Request.Fields.AmazonCredential);
-            payload.AddFormContent("x-amz-date", amazonFile.Request.Fields.AmazonDate);
-            payload.AddFormContent("policy", amazonFile.Request.Fields.Policy);
-            payload.AddFormContent("x-amz-signature", amazonFile.Request.Fields.AmazonSignature);
-            payload.AddFormContent("x-amz-security-token", amazonFile.Request.Fields.AmazonSecurityToken);
-            payload.AddStreamContent("file", amazonFile.FileId, file, "application/octet-stream");
-
-            // upload to S3
-            var response = await new HttpClient().PostAsync(AMAZON_UPLOAD_URL, payload);
-
-            if (!response.IsSuccessStatusCode)
+            long lastpos = file.Position;
+            try
             {
-                throw new Exception("Error while upload to Amazon S3");
-            }
+                _BytesToDo += file.Length;
+                await _Semaphore.WaitAsync();
+                // get upload token
+                var amazonFile = await Post<AmazonToken>("/v2/file", new ByteArrayContent(new byte[] { }));
 
-            return amazonFile;
+                // create payload
+                var payload = new MultipartContent("form-data");
+                payload.AddFormContent("key", amazonFile.Request.Fields.Key);
+                payload.AddFormContent("x-amz-algorithm", amazonFile.Request.Fields.AmazonAlgorithm);
+                payload.AddFormContent("x-amz-credential", amazonFile.Request.Fields.AmazonCredential);
+                payload.AddFormContent("x-amz-date", amazonFile.Request.Fields.AmazonDate);
+                payload.AddFormContent("x-amz-security-token", amazonFile.Request.Fields.SecurityToken);
+                payload.AddFormContent("policy", amazonFile.Request.Fields.Policy);
+                payload.AddFormContent("x-amz-signature", amazonFile.Request.Fields.AmazonSignature);
+                payload.AddStreamContent("file", amazonFile.FileId, file, "application/octet-stream");
+                // upload to S3
+                var resp = new HttpClient().PostAsync(amazonFile.Request.Url, payload);
+                while (!resp.Wait(1000))
+                {
+                    _BytesDone += file.Position - lastpos;
+                    lastpos = file.Position;
+                }
+                _BytesDone += file.Position - lastpos;
+                lastpos = file.Position;
+                var response = resp.Result;
+
+                System.Diagnostics.Debug.WriteLine($"Retrieve UploadFile.Finished");
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new Exception("Error while upload to Amazon S3");
+                }
+
+                return amazonFile;
+            }
+            finally
+            {
+                _Semaphore.Release();
+                _BytesDone += file.Length - lastpos;
+                if (_BytesDone == _BytesToDo)
+                    _BytesToDo = _BytesDone = 0;
+            }
         }
 
         public Task<CreativeTonie> PatchCreativeTonie(string householdId, string creativeTonieId, string name, IEnumerable<Chapter> chapters)
