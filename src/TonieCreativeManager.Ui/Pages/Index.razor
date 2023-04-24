@@ -1,13 +1,26 @@
 ﻿@page "/"
 
-@inject IHttpContextAccessor Accessor
-
+@inject NavigationManager NavigationManager
+@inject UserService UserService
 @inject Settings Settings
+@inject SessionService Session
+@inject RepositoryService RepositoryService
+@inject TonieCloud.Login Login
 
 @code {
-
-    protected override void OnInitialized()
+    protected override async void OnAfterRender(bool firstRender)
     {
-        Accessor.HttpContext.Response.Redirect(Settings.EnableShop ? "/user/select" : "/upload");
+        var users = await UserService.GetUsers();
+        var settings = await RepositoryService.GetGeneralSettings();
+        if (settings.TonieUserID == null && Login.Email != null)
+        {
+            settings.TonieUserID = Login.Email;
+            settings.ToniePassword = Login.Password;
+            await RepositoryService.SetGeneralSettings(settings);
+        }
+        if ((users?.Count() ?? 0) == 0)
+            NavigationManager.NavigateTo("/admin/settings");
+        else
+            NavigationManager.NavigateTo(Session.UserId == null ? "/user/select" : "/upload");
     }
 }

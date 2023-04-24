@@ -16,7 +16,7 @@ namespace Test
         {
             DotNetEnv.Env.Load("../../../../../.env");
             
-            client = new TonieCloudClient(new Login { Email = DotNetEnv.Env.GetString("MYTONIE_LOGIN"), Password = DotNetEnv.Env.GetString("MYTONIE_PASSWORD") });
+            client = new TonieCloudClient(new Login (DotNetEnv.Env.GetString("MYTONIE_LOGIN"), DotNetEnv.Env.GetString("MYTONIE_PASSWORD")),3);
         }
 
         [Test]
@@ -37,14 +37,14 @@ namespace Test
 
             var tonie = tonies.First(t => t.Name == "Test");
 
-            var uploadRequest = new UploadFilesToCreateiveTonieRequest
+            var uploadRequest = new UploadFilesToCreativeTonieRequest
             {
                 CreativeTonieId = tonie.Id,
                 HouseholdId = households[0].Id,
                 TonieName = "Test 2",
                 Entries = new[]
                 {
-                    new UploadFilesToCreateiveTonieRequest.Entry
+                    new UploadFilesToCreativeTonieRequest.Entry
                     {
                         File = File.OpenRead("TestData/1.m4a"),
                         Name = "Kapitel 1"
@@ -52,7 +52,7 @@ namespace Test
                 }
             };
             
-            var response =  await client.UploadFilesToCreateiveTonie(uploadRequest);
+            var response =  await client.UploadFilesToCreativeTonie(uploadRequest);
         }
     }
 }

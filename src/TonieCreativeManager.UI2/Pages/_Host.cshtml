@@ -1,0 +1,17 @@
+﻿@page "/"
+@namespace TonieCreativeManager.UI2.Pages
+@using Microsoft.AspNetCore.Authentication;
+@addTagHelper *, Microsoft.AspNetCore.Mvc.TagHelpers
+@{
+    Layout = "_Layout";
+    int userid = 0;
+    if (HttpContext.Request.Cookies.ContainsKey("SelectedUser"))
+        int.TryParse(HttpContext.Request.Cookies["SelectedUser"], out userid);
+    var tokens = new Shared.InitialApplicationState
+    {
+        SelectedUser = userid == 0 ? null : userid
+    };
+}
+
+<component type="typeof(App)" param-InitialState="tokens" 
+    render-mode="ServerPrerendered" />

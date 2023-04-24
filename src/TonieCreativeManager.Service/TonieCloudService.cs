@@ -8,30 +8,26 @@ namespace TonieCreativeManager.Service
 {
     public class TonieCloudService
     {
-        private readonly TonieCloudClient client;
+        private readonly TonieCloudClient _Client;
 
         public TonieCloudService(TonieCloudClient client)
         {
-            this.client = client;
+            _Client = client;
         }
 
-        private IEnumerable<CreativeTonie> creativeTonies;
-        private IEnumerable<Household> households;
-        private IEnumerable<Toniebox> tonieboxes;
+        public void ClearCache()
+        {
+            _CreativeTonies = null;
+            _Households = null;
+        }
+
+        private IEnumerable<CreativeTonie>? _CreativeTonies;
+        private IEnumerable<Household>? _Households;
 
         public async Task<Household> GetHousehold() => (await GetHouseholds()).FirstOrDefault() ?? throw new Exception("No household found");
 
-        public async Task<IEnumerable<Household>> GetHouseholds() => households ?? (households = await client.GetHouseholds());
+        public async Task<IEnumerable<Household>?> GetHouseholds() => _Households ??= await _Client.GetHouseholds();
 
-        public async Task<IEnumerable<CreativeTonie>> GetCreativeTonies() => creativeTonies ?? (creativeTonies = await client.GetCreativeTonies((await GetHousehold()).Id));
-        
-        public async Task<CreativeTonie> GetCreativeTonie(string creativeTonieId) => (await GetCreativeTonies()).FirstOrDefault(t => t.Id == creativeTonieId);
-
-        public void RefreshCreativeTonies() => creativeTonies = null;
-
-        public Task<CreativeTonie> UploadFilesToCreateiveTonie(UploadFilesToCreateiveTonieRequest request) => client.UploadFilesToCreateiveTonie(request);
-
-        public async Task<IEnumerable<Toniebox>> GetTonieboxes() => tonieboxes ?? (tonieboxes = await client.GetTonieboxes((await GetHousehold()).Id));
-
+        public async Task<IEnumerable<CreativeTonie>?> GetCreativeTonies() => _CreativeTonies ??= await _Client.GetCreativeTonies((await GetHousehold()).Id ?? "");
     }
 }

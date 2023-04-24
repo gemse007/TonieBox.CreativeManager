@@ -1,0 +1,31 @@
+﻿@page "/tonies"
+
+@inject MediaService _MediaService
+@inject PersistentData.User _CurrentUser
+@inject UserService _UserService
+
+<PageTitle>Tonies</PageTitle>
+<Grid Items="TonieList" Size="290px" ShowText="true"/>
+
+@code {
+    private IEnumerable<Tonie>? _Tonies;
+    private IEnumerable<PersistentData.TonieMapping>? _MappedTonies;
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _Tonies ??= (await _UserService.GetCreativeTonies(_CurrentUser?.Id)) ?? new Tonie[] { };
+        await base.OnParametersSetAsync();
+    }
+
+    GridItem[] TonieList => _Tonies
+        ?.OrderBy(_ => _?.Name)
+        .Select(_ =>
+        {
+            return new GridItem
+                {
+                    ImageUrl = _.ImageUrl,
+                    Name = _CurrentUser.ShowText ? _?.Name : null,
+                    SubImageUrl = _.CurrentMediaPath == null ? null : $"/cover?path={_.CurrentMediaPath.EncodeUrl()}",
+                };
+        }).ToArray() ?? new GridItem[] { };
+}

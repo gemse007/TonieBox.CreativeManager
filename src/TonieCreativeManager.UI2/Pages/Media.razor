@@ -1,0 +1,201 @@
+﻿@page "/media"
+@page "/media/{path}"
+@page "/media/{path}/{tonieids}"
+
+@inject RepositoryService _RepositoryService
+@inject TonieCloudService _TonieCloudService
+@inject NavigationManager _NavigationManager
+@inject MediaService _MediaService
+@inject PersistentData.User _CurrentUser
+@inject UserService _UserService
+
+<PageTitle>Media Service</PageTitle>
+
+@if (CurrentState == State.SelectMedia)
+{
+        <Grid Items="MediaItems" Size="290px" ShowText="true"/>
+}
+else if (CurrentState == State.SelectTonie)
+{
+        <Grid Items="UserTonies" Size="290px" ShowText="true"/>
+}
+else
+{
+        <div class="centered mt-5">
+
+            <div style="display:flex; align-items:center;">
+               <Item ViewModel="SelectedMedaItem" Width="40vw"/>
+            @if (_Confirmed)
+            {
+                                <img src="/loader.gif" style="margin:2rem;" />
+            }
+            else
+            {
+                @if (_CurrentUser.Credits >= (CurrentState == State.BuyMedia ? _CurrentUser.MediaCost : _CurrentUser.UploadCost * _MediaItem.ToniesNeeded))
+                {
+                                <div class="mt-5">
+                                    <MudButton OnClick="ConfirmBuy" Style="font-size:2rem;">
+                                        <span>
+                                            <i class="fas fa-coins"></i>
+                                @(CurrentState == State.BuyMedia ? _CurrentUser.MediaCost : _CurrentUser.UploadCost * _MediaItem.ToniesNeeded)
+                                            <i class="fas fa-check-circle ml-3"></i>
+                                        </span>
+                                    </MudButton>
+                                </div>
+                }
+            }
+            @if (CurrentState != State.BuyMedia)
+            {
+                        <Item  ViewModel="SelectedTonie" Width="40vw"/>
+            }
+            </div>
+        </div>    
+}
+
+@code {
+    [Parameter]
+    public string? Path { get => _Path; set => _Path = value?.DecodeUrl() ?? ""; }
+    [Parameter]
+    public string? TonieIds { get => _TonieIds; set => _TonieIds = value; }
+
+    private string? _Path;
+    private string? _TonieIds;
+    private State CurrentState => (_MediaItem == null || !_MediaItem.IsUploadable) ? State.SelectMedia
+        : !_MediaItem.IsBoughtByUser(_CurrentUser) && !_Confirmed ? State.BuyMedia
+        : (((_SelectedTonies?.Length ?? 0) != _MediaItem.ToniesNeeded) ? State.SelectTonie
+        : _Confirmed ? State.Confirmed : State.Confirm);
+    private enum State
+    {
+        SelectMedia,
+        BuyMedia,
+        SelectTonie,
+        Confirm,
+        Confirmed
+    }
+    private bool _Confirmed;
+    private MediaItem? _MediaItem;
+    private IEnumerable<Tonie>? _Tonies;
+    private IEnumerable<PersistentData.TonieMapping>? _MappedTonies;
+    private Tonie[]? _SelectedTonies;
+    private string SelectedToniesIds => string.Join(",", _SelectedTonies?.Select(_ => _.Id.ToString()) ?? new[] { "" });
+
+    protected override async Task OnParametersSetAsync()
+    {
+        _Tonies ??= (await _UserService.GetCreativeTonies(_CurrentUser.Id)) ?? new Tonie[] { };
+        _MappedTonies ??= await _RepositoryService.GetMappings();
+        if ((_MediaItem?.Path ?? "-") != _Path)
+        {
+            _MediaItem = await _MediaService.GetMediaItemAsync(_Path);
+            StateHasChanged();
+        }
+        if (SelectedToniesIds != _TonieIds)
+        {
+            _SelectedTonies = _TonieIds?.Split(",").Select(_ => _Tonies.FirstOrDefault(t => t.Id == _)).Where(_ => _ != null).ToArray();
+            StateHasChanged();
+        }
+        await base.OnParametersSetAsync();
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_CurrentUser?.Id == 0)
+        {
+            _NavigationManager.NavigateTo("/userselect", true);
+            return;
+        }
+        if (_MediaItem != null && _MediaItem.Path != "" && !_MediaItem.IsAllowedForUserToBuy(_CurrentUser))
+        {
+            _NavigationManager.NavigateTo($"/media/{System.IO.Path.GetDirectoryName(_Path).EncodeUrl()}", true);
+            return;
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    private async Task ConfirmBuy()
+    {
+        if (!_MediaItem.IsBoughtByUser(_CurrentUser))
+        {
+            _Confirmed = true;
+            StateHasChanged();
+            await _UserService.BuyItem(_CurrentUser.Id, _MediaItem.Path);
+            _NavigationManager.NavigateTo($"/media/{_Path.EncodeUrl()}", true);
+        }
+        else
+        {
+            _Confirmed = true;
+            StateHasChanged();
+            await _UserService.UploadItem(_CurrentUser.Id, _MediaItem.Path, _SelectedTonies.Select(_ => _.Id).ToArray(), false);
+            await Task.Delay(3000);
+            _NavigationManager.NavigateTo($"/media/{System.IO.Path.GetDirectoryName(_Path).EncodeUrl()}", true);
+        }
+    }
+
+    private async Task ChangeFavorite(MediaItem m)
+    {
+        if (_CurrentUser.HiddenMedia.Contains(m.Id))
+            _CurrentUser.HiddenMedia.Remove(m.Id);
+        else
+            _CurrentUser.HiddenMedia.Add(m.Id);
+        await _RepositoryService.SetUser(_CurrentUser);
+        StateHasChanged();
+    }
+
+    GridItem[] MediaItems => _MediaItem
+        ?.Childs
+        .Where(_ =>
+                _.TotalSize != 0
+                && _.IsAllowedForUserToBuy(_CurrentUser)
+                && (_CurrentUser.ShowHidden || !_CurrentUser.HiddenMedia.Contains(_.Id))
+        )
+        .OrderBy(_ => _?.Path)
+        .Select(_ =>
+        {
+            var pathEncoded = _.Path.EncodeUrl() ?? "folder";
+            var tonie = _Tonies?.FirstOrDefault(t => t.CurrentMediaPath == _.Path);
+            var hasChildren = !_.IsUploadable;
+            return new GridItem
+                {
+                    ImageUrl = $"/cover?path={pathEncoded}",
+                    Name = _CurrentUser.ShowText ? _?.Name : null,
+                    SubLeftImageUrl = hasChildren ? $"/cover?path=folder" : null,
+                    SubImageUrl = !_.IsBoughtByUser(_CurrentUser) ? Icons.Material.Filled.AddShoppingCart.ImageSvg()
+                                : _CurrentUser.HiddenMedia.Contains(_.Id) ? Icons.Material.Filled.Favorite.ImageSvg()
+                                : _CurrentUser.ShowHidden ? Icons.Material.Filled.FavoriteBorder.ImageSvg() : tonie?.ImageUrl,
+                    OnSubClick = !_.IsBoughtByUser(_CurrentUser) ? null : () => ChangeFavorite(_),
+                    IsTonieSubImage = tonie != null,
+                    Restricted = !_.IsBoughtByUser(_CurrentUser) || _CurrentUser.HiddenMedia.Contains(_.Id),
+                    //Url = _.IsBoughtByUser(_CurrentUser) ? $"/media/{pathEncoded}" : $"/shop/{pathEncoded}"
+                    OnClick = () => _NavigationManager.NavigateTo($"/media/{pathEncoded}", true)
+                };
+        }).ToArray() ?? new GridItem[] { };
+
+    GridItem[] UserTonies => _Tonies
+        .Select(_ =>
+        {
+            return new GridItem
+                {
+                    ImageUrl = _.ImageUrl,
+                    Url = $"/media/{_Path.EncodeUrl()}/{string.Join(",", (_SelectedTonies?.Select(_ => _.Id) ?? new string[] { }).Append(_.Id))}",
+                    SubImageUrl = _.CurrentMediaPath == null ? null : $"/cover?path={_.CurrentMediaPath.EncodeUrl()}",
+                    Name = _.Name,
+                    Restricted = _SelectedTonies?.Any(t => t.Id == _.Id) ?? false
+                };
+        }).ToArray();
+
+    GridItem SelectedMedaItem => new GridItem { ImageUrl = $"/cover?path={_Path.EncodeUrl()}", Name = _CurrentUser.ShowText ? _Path : null };
+
+    GridItem SelectedTonie
+    {
+        get
+        {
+            var t = _SelectedTonies.FirstOrDefault();
+            var t2 = _SelectedTonies.FirstOrDefault(_ => _ != t);
+            return new GridItem
+                {
+                    ImageUrl = t.ImageUrl,
+                    SubImageUrl = t2 == null ? null : t2.ImageUrl,
+                    IsTonieSubImage = t2 != null
+                };
+        }
+    }
+}

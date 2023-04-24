@@ -1,0 +1,40 @@
+﻿@page "/userselect"
+
+@inject RepositoryService _RepositoryService
+@inject NavigationManager _NavigationManager
+@inject IJSRuntime _IJSRuntime
+
+<PageTitle>User-Selection</PageTitle>
+
+<Grid Items="Users" Size="290px" ShowText="true"/>
+
+@code {
+    private IEnumerable<PersistentData.User> _Users { get; set; } = new PersistentData.User[] { };
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    public async Task SelectCurrentUser(int id)
+    {
+        var user = _Users.FirstOrDefault(_ => _.Id == id);
+        if (user != null) {
+            var test = await _IJSRuntime.InvokeAsync<string>("blazorExtensions.WriteCookie", "SelectedUser", id);
+            _NavigationManager.NavigateTo("/media", true);
+        }
+    }
+
+    GridItem[] Users => _Users
+        .Select(_ => new GridItem
+        {
+            ImageUrl = _.ProfileImageUrl,
+            Name = _.Name,
+            OnClick = () => SelectCurrentUser(_.Id)
+        }).ToArray();
+}

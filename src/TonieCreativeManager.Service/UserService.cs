@@ -9,152 +9,146 @@ namespace TonieCreativeManager.Service
 {
     public class UserService
     {
-        private readonly CreativeTonieService creativeTonieService;
-        private readonly RepositoryService repositoryService;
-        private readonly VoucherService voucherService;
-        private readonly Settings settings;
-        private readonly MediaService mediaService;
-
-        public UserService(CreativeTonieService creativeTonieService, RepositoryService repositoryService, VoucherService voucherService, Settings settings, MediaService mediaService)
+        private readonly TonieCloudClient _TonieCloudClient;
+        private readonly RepositoryService _RepositoryService;
+        private readonly VoucherService _VoucherService;
+        private readonly Settings _Settings;
+        private readonly MediaService _MediaService;
+        private readonly UploadService _UploadService;
+        private Tonie[]? _Tonies;
+        private DateTime _ToniesCacheUntil;
+        public UserService(TonieCloudClient tonieCloudClient, RepositoryService repositoryService, VoucherService voucherService, Settings settings, MediaService mediaService, UploadService uploadService)
         {
-            this.creativeTonieService = creativeTonieService;
-            this.repositoryService = repositoryService;
-            this.voucherService = voucherService;
-            this.settings = settings;
-            this.mediaService = mediaService;
+            _TonieCloudClient = tonieCloudClient;
+            _RepositoryService = repositoryService;
+            _VoucherService = voucherService;
+            _Settings = settings;
+            _MediaService = mediaService;
+            _UploadService = uploadService;
+            _RepositoryService.RepositoryChanged += (s, e) => { if (e == null || e == "User") _ToniesCacheUntil = DateTime.MinValue; };
         }
 
-        public Task<IEnumerable<PersistentData.User>> GetUsers() => repositoryService.GetUsers();
+        public async Task<IEnumerable<PersistentData.User>?> GetUsers() => await _RepositoryService.GetUsers();
 
-        public async Task<PersistentData.User> GetUser(string id) => (await GetUsers()).FirstOrDefault(u => u.Id == id);
+        public async Task<PersistentData.User> GetUser(int id) => (await GetUsers()).FirstOrDefault(u => u.Id == id);
 
-        public async Task<bool> CanBuyItem(string userId)
-        {
-            var user = await GetUser(userId);
-
-            return user.Credits >= settings.MediaItemBuyCost;
-        }
-
-        public async Task<bool> CanUploadItem(string userId)
+        public async Task<bool> CanBuyItem(int userId)
         {
             var user = await GetUser(userId);
 
-            return user.Credits >= settings.MediaItemUploadCost;
+            return user.Credits >= user.MediaCost;
         }
 
-        public async Task<PersistentData.Voucher> RedeemVoucher(string code, string userId)
+        public async Task<bool> CanUploadItem(int userId, int toniesNeeded)
+        {
+            var user = await GetUser(userId);
+
+            return user.Credits >= user.UploadCost * toniesNeeded;
+        }
+
+        public async Task<PersistentData.Voucher> RedeemVoucher(Guid code, int userId)
         {
             var user = await GetUser(userId);
 
             // redeem voucher
-            var voucher = await voucherService.Redeem(code);
+            var voucher = await _VoucherService.Redeem(code);
 
             // credit user
             user.Credits += voucher.Value;
 
             // save user
-            await repositoryService.SetUser(user);
+            await _RepositoryService.SetUser(user);
 
             return voucher;
         }
 
-        public async Task BuyItem(string userId, string path)
+        public async Task BuyItem(int userId, string path)
         {
             var user = await GetUser(userId);
+            var mediaItem = await _MediaService.GetMediaItemAsync(path);
 
             // check credit
-            if (user.Credits < settings.MediaItemBuyCost)
-            {
+            if (user.Credits < user.MediaCost)
                 throw new Exception("Insufficient credits");
-            }
 
             // subtract credit
-            user.Credits -= settings.MediaItemBuyCost;
-
-            // reward back one credit to allow upload
-            user.Credits++;
+            user.Credits -= user.MediaCost;
 
             // save user
-            await repositoryService.SetUser(user);
-
-            // mark path as bought
-            await mediaService.MarkFolderAsBought(path);
+            user.BoughtMedia.Add(mediaItem.Id);
+            user.History.Add(new PersistentData.History($"MediaItem {mediaItem.Id} {mediaItem.Path} bought"));
+            await _RepositoryService.SetUser(user);
         }
 
-        public async Task UploadItem(string userId, string path, string creativeTonieId)
+        public async Task UploadItem(int userId, string path, string[] creativeTonieId, bool append)
         {
             var user = await GetUser(userId);
+            var mediaItem = await _MediaService.GetMediaItemAsync(path);
 
             // check credit
-            if (user.Credits < settings.MediaItemUploadCost)
-            {
+            if (user.Credits < user.UploadCost * mediaItem.ToniesNeeded)
                 throw new Exception("Insufficient credits");
-            }
+            // check TonieCounts
+            if (creativeTonieId?.Length < mediaItem.ToniesNeeded)
+                throw new Exception("Insufficient Tonies");
 
             // upload
-            await creativeTonieService.Upload(path, creativeTonieId);
+            _UploadService.AddJob(new UploadJob(userId, creativeTonieId, mediaItem.Path, mediaItem.Name, mediaItem.Childs.ToArray(), append));
+            //_UploadService.AddJob(new UploadJob("", creativeTonieId, "", (path, creativeTonieId).Start();
 
             // subtract credit
-            user.Credits -= settings.MediaItemUploadCost;
+            user.Credits -= user.UploadCost * mediaItem.ToniesNeeded;
 
             // save user
-            await repositoryService.SetUser(user);
+            await _RepositoryService.SetUser(user);
         }
-
-        public async Task<IEnumerable<Tonie>> GetCreativeTonies(string userId)
+        private async Task<IEnumerable<Tonie>?> GetTonies()
         {
-            var creativeTonies = await creativeTonieService.GetTonies();
-
-            var user = await GetUser(userId);
-
-            return creativeTonies.Where(ct => user.Tonies.Contains(ct.Id)).ToArray();
-        }
-
-        public async Task<IEnumerable<Tonie>> GetCreativeTonies()
-        {
-            var creativeTonies = await creativeTonieService.GetTonies();
-
-            var users = await GetUsers();
-
-            foreach (var tonie in creativeTonies)
+            if (_ToniesCacheUntil > DateTime.UtcNow) return _Tonies;
+            _ToniesCacheUntil = DateTime.UtcNow.AddHours(1);
+            var hh = (await _TonieCloudClient.GetHouseholds())?.FirstOrDefault();
+            if (hh != null)
             {
-                var user = users.FirstOrDefault(u => u.Tonies.Contains(tonie.Id));
-
-                if (user != null)
+                var tonies = await _TonieCloudClient.GetCreativeTonies(hh.Id);
+                var map = await _RepositoryService.GetMappings();
+                _Tonies = tonies?.Select(ct => new Tonie(ct.Id)
                 {
-                    tonie.UserId = user.Id;
-                    tonie.UserProfileImageUrl = user.ProfileImageUrl;
-                }
+                    ImageUrl = ct.ImageUrl,
+                    Name = ct.Name,
+                    CurrentMediaPath = map?.FirstOrDefault(m => m.TonieId == ct.Id)?.Path
+                }).ToArray();
             }
-
-            return creativeTonies;
+            else
+                _Tonies = null;
+            return _Tonies;
         }
 
-        public async Task<IEnumerable<MediaItem>> GetUploadableItems(string path, string userId)
+        public async Task<IEnumerable<Tonie>> GetCreativeTonies(int? userId = null)
         {
-            var creativeTonies = await GetCreativeTonies(userId);
-            
-            var mediaItems = await mediaService.GetItems(path);
+            var user = userId == null ? null : await GetUser(userId.Value);
+            return (await GetTonies())?.Where(t => user == null || user.Tonies.Contains(t.Id)).ToArray() ?? new Tonie[] { };
+        }
 
-            bool IsUnmappedItem(MediaItem item) => !creativeTonies.Any(tonie => item.MappedTonieIds.Contains(tonie.Id));
-
-            return mediaItems
+        public async Task<IEnumerable<MediaItem>> GetUploadableItems(string path, int userId)
+        {
+            var user = await GetUser(userId);
+            var mediaItem = await _MediaService.GetMediaItemAsync(path);
+            return mediaItem
+                .Childs
                 .Where(item =>
-                    item.HasBought &&
-                    (
-                        item.Childs.Any(child => child.HasBought && IsUnmappedItem(child)) ||
-                        !item.Childs.Any() && IsUnmappedItem(item)
-                    ))
+                    item.TotalSize != 0
+                    && user.AllowedMedia.Any(p => item.Path.IndexOf(p) == 0)
+                    && user.BoughtMedia.Any(p => item.Path.IndexOf(p) == 0))
                 .ToArray();
         }
 
-        public async Task SetCredits(string userId, int credits)
+        public async Task SetCredits(int userId, int credits)
         {
             var user = await GetUser(userId);
 
             user.Credits = credits;
 
-            await repositoryService.SetUser(user);
+            await _RepositoryService.SetUser(user);
         }
     }
 }

@@ -14,11 +14,11 @@
 
         items = users
             .Select(u => new GridItem
-            {
-                Name = u.Name,
-                ImageUrl = u.ProfileImageUrl,
-                Url = $"/user/selected/{u.Id}"
-            })
+                {
+                    Name = u.Name,
+                    ImageUrl = u.ProfileImageUrl,
+                    Url = $"/user/selected/{u.Id}"
+                })
             .ToArray();
     }
 

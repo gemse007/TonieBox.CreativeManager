@@ -1,0 +1,160 @@
+﻿@page "/settings"
+@using TonieCloud;
+@inject RepositoryService _RepositoryService
+@inject TonieCloudClient _TonieCloudClient
+@inject ISnackbar _Snackbar
+@inject NavigationManager _NavigationManager
+@inject Settings _Settings
+<PageTitle>Administration</PageTitle>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
+        <MudText Typo="Typo.h4">Logindata</MudText>
+    </MudCardHeader>
+    <MudCardContent>
+        <MudTextField Required="true" RequiredError="User name is required!" @bind-Value="Username" Label="Tonie EMail"/>
+        <MudTextField Required="true" RequiredError="Password is required!" @bind-Value="Password" Label="Tonie Password" InputType="@(ShowPassword ? InputType.Text : InputType.Password)" Adornment="Adornment.End" AdornmentIcon="@(ShowPassword ? Icons.Material.Filled.Visibility : Icons.Material.Filled.VisibilityOff)" OnAdornmentClick="@(()=>ShowPassword = !ShowPassword)" AdornmentAriaLabel="Show Password"/>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="saveLogin" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Call" OnClick="testLogin" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Test with MyTonieCloud</MudButton>
+    </MudCardActions>
+</MudCard>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
+        <MudText Typo="Typo.h4">Users</MudText>
+    </MudCardHeader>
+    <MudCardContent>
+        <Grid Items="Users" Size="290px" ShowText="true"/>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Add User</MudButton>
+    </MudCardActions>
+</MudCard>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
+        <MudText Typo="Typo.h4">Vouchers</MudText>
+    </MudCardHeader>
+    <MudCardContent>
+        <MudTable Items="@_Vouchers">
+            <HeaderContent>
+                <MudTd>Code</MudTd>
+                <MudTd>Amount</MudTd>
+                <MudTd>Used</MudTd>
+                <MudTd></MudTd>
+            </HeaderContent>
+            <RowTemplate>
+                <MudTd>@context.Code</MudTd>
+                <MudTd>@context.Value</MudTd>
+                <MudTd>@context.Used</MudTd>
+                <MudTd><MudFab Icon="@Icons.Material.Filled.Delete" Color="Color.Primary" OnClick="@(()=>DeleteVoucher(context))"/></MudTd>
+            </RowTemplate>
+        </MudTable>
+        <MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+            <MudCardHeader>
+                <MudText Typo="Typo.h4">Add Voucher</MudText>
+            </MudCardHeader>
+            <MudCardContent>
+                <Password @bind-Value="_Voucher.Code" CodeItems="@_Settings.KeyboardCharacters"/>
+                <MudNumericField @bind-Value="_Voucher.Value"/>
+            </MudCardContent>
+            <MudCardActions>
+                <MudButton OnClick="AddVoucher" StartIcon="@Icons.Material.Filled.Add" Color="Color.Primary" Variant="Variant.Filled">Add</MudButton>
+            </MudCardActions>
+        </MudCard>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="saveVouchers" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save</MudButton>
+    </MudCardActions>
+</MudCard>
+
+
+@code {
+    private IEnumerable<PersistentData.User>? _Users = null;
+    private IEnumerable<PersistentData.Voucher> _Vouchers = new PersistentData.Voucher[] { };
+    private PersistentData.Voucher _Voucher = new PersistentData.Voucher() { Value = 5 };
+    private List<PersistentData.Voucher> _ChangedVouchers = new List<PersistentData.Voucher>();
+    private bool _VoucherAlertDone;
+    public string Username { get; set; } = "";
+    public string Password { get; set; } = "";
+    private bool ShowPassword = false;
+    private bool ShowVoucherPassword = false;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            var settings = await _RepositoryService.GetGeneralSettings();
+            Username = settings?.TonieUserID ?? "";
+            Password = settings?.ToniePassword ?? "";
+            _Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
+            await LoadVouchers();
+            Users = _Users
+                .Select(_ => new GridItem { ImageUrl = _.ProfileImageUrl, Name = _.Name, Url = $"/admin/user/{_.Id}" })
+                .ToArray();
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+    private async Task LoadVouchers() => _Vouchers = (await _RepositoryService.GetVouchers())?.OrderBy(_ => _.Used).ToArray() ?? new PersistentData.Voucher[] { };
+    public IEnumerable<GridItem> Users { get; set; } = new GridItem[] { };
+
+    public async void saveLogin()
+    {
+        _TonieCloudClient.Login = new Login(Username, Password);
+        var gs = await _RepositoryService.GetGeneralSettings() ?? new Service.Model.PersistentData.GeneralSetting();
+        gs.TonieUserID = Username;
+        gs.ToniePassword = Password;
+        await _RepositoryService.SetGeneralSettings(gs);
+        _Snackbar.Add("Saved", Severity.Success);
+    }
+
+    public async void testLogin()
+    {
+        var login = new Login(Username, Password);
+        var tc = new TonieCloudClient(login, 1);
+        var h = await tc.GetHouseholds();
+        var ok = (h?.Length ?? 0) > 0;
+        _Snackbar.Add($"Login with MyTonieCloud did {(ok ? "" : "not")} work", ok ? Severity.Success : Severity.Error);
+        StateHasChanged();
+    }
+
+    public void AddUser()
+    {
+        var id = (_Users?.Count() == 0) ? 1 : _Users.Max(_ => _.Id) + 1;
+        _NavigationManager.NavigateTo($"/admin/user/{id}", true);
+    }
+
+    public void AddVoucher()
+    {
+        if (!string.IsNullOrWhiteSpace(_Voucher.Code))
+        {
+            _ChangedVouchers.Add(_Voucher);
+            _Vouchers = _Vouchers.Append(_Voucher).OrderBy(_ => _.Used).ToArray();
+            _Voucher = new PersistentData.Voucher { Value = 5 };
+            StateHasChanged();
+            if (!_VoucherAlertDone)
+            {
+                _Snackbar.Add("Don't forget to Save ...");
+                _VoucherAlertDone = true;
+            }
+        }
+    }
+    public void DeleteVoucher(PersistentData.Voucher v)
+    {
+        if (_ChangedVouchers.Contains(v))
+            _ChangedVouchers.Remove(v);
+        else
+            _ChangedVouchers.Add(new PersistentData.Voucher { Id = v.Id });
+        _Vouchers = _Vouchers.Where(_=>_.Id != v.Id).ToArray();
+    }
+
+    public async Task saveVouchers()
+    {
+        foreach (PersistentData.Voucher v in _ChangedVouchers)
+            if (v.Code == null)
+                await _RepositoryService.DeleteVoucher(v);
+            else
+                await _RepositoryService.SetVoucher(v);
+        _ChangedVouchers.Clear();
+    }
+}

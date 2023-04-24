@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Web;
 
 namespace TonieCreativeManager.Service
@@ -37,8 +38,9 @@ namespace TonieCreativeManager.Service
                 else
                     characters.Add(new string(new[] { c }));
             }
-
             return characters;
         }
+
+        public static string? ImageSvg(this string value) => string.IsNullOrWhiteSpace(value) ? null : $"data:image/svg+xml,<svg xmlns=\\'http://www.w3.org/2000/svg\\' viewBox=\\'0 0 30 30\\'>{value}</svg>";
     }
 }

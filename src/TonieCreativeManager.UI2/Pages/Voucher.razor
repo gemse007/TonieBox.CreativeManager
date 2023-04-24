@@ -1,0 +1,36 @@
+﻿@page "/voucher"
+
+@inject VoucherService _VoucherService
+@inject UserService _UserService
+@inject PersistentData.User _CurrentUser
+@inject Settings _Settings
+@inject NavigationManager _NavigationManger
+
+<PageTitle>Redeem Voucher</PageTitle>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <Password @bind-Value="@Value" CodeItems="@_Settings.KeyboardCharacters" FullSize="true"/>
+</MudCard>
+
+@code {
+    private string _Value;
+    private IEnumerable<PersistentData.Voucher> _Vouchers;
+
+    private string Value { get => _Value; set { if (_Value != value) { _Value = value; TryRedeem(); } } }
+
+    protected override async void OnParametersSet()
+    {
+        _Vouchers = (await _VoucherService.GetVouchers()).Where(_=>_.Used == null).ToArray();
+
+        base.OnParametersSet();
+    }
+
+    private async Task TryRedeem()
+    {
+        var voucher = _Vouchers?.FirstOrDefault(_ => _.Code == _Value);
+        if (voucher != null)
+        {
+            await _UserService.RedeemVoucher(voucher.Id, _CurrentUser.Id);
+            _NavigationManger.NavigateTo("/media",true);
+        }
+    }
+}

@@ -15,7 +15,10 @@ namespace TonieCreativeManager.Ui
     {
         public static void Main(string[] args)
         {
-            DotNetEnv.Env.Load("../../.env");
+            var filename = args.FirstOrDefault();
+            if (filename == null || !System.IO.File.Exists(filename)) filename = ".env";
+            if (!System.IO.File.Exists(filename)) filename = "../../.env";
+            DotNetEnv.Env.Load(filename);
 
             CreateHostBuilder(args).Build().Run();
         }

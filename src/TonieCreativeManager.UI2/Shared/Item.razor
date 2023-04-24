@@ -1,0 +1,37 @@
+﻿
+<a class="component-item__a" href="@(ViewModel.Disabled ? null : ViewModel.Url)" style="@Style" onclick="@(()=>{if (!ViewModel.Disabled && ViewModel.OnClick != null) ViewModel.OnClick();})">
+    <div class="component-item__image @(ViewModel.Restricted || ViewModel.Disabled ? "component-item--restricted" : "")" style="background-image:url('@ViewModel.ImageUrl'); width:@Width" />
+    @if (!string.IsNullOrEmpty(ViewModel.SubImageUrl))
+    {
+            <div onclick="@(()=>{if (ViewModel.OnSubClick != null) ViewModel.OnSubClick(); else if (ViewModel.OnClick != null) ViewModel.OnClick();})" 
+                @onclick:stopPropagation="true"
+                class="component-item__subimage @(ViewModel.IsTonieSubImage ? "component-item--tonie" : "")" 
+                style="background-image:url('@ViewModel.SubImageUrl')">
+        </div>
+    }
+    else if (!string.IsNullOrEmpty(ViewModel.SubIcon))
+    {
+        <div onclick="@(()=>{if (ViewModel.OnSubClick != null) ViewModel.OnSubClick(); else if (ViewModel.OnClick != null) ViewModel.OnClick();})" 
+            @onclick:stopPropagation="true"
+            class="component-item__subimage @(ViewModel.Restricted || ViewModel.Disabled ? "component-item--restricted" : "")">
+            <span class="oi @ViewModel.SubIcon" aria-hidden="true"></span>
+        </div>
+    }
+    @if (!string.IsNullOrEmpty(ViewModel.SubLeftImageUrl))
+    {
+            <div class="component-item__subleftimage @(ViewModel.Restricted || ViewModel.Disabled ? "component-item--restricted" : "")" style="background-image:url('@ViewModel.SubLeftImageUrl')"></div>
+    }
+    @if (ShowText)
+    {
+        <div class="component-item__text">@ViewModel.Name</div>
+    }
+</a>
+
+
+@code {
+    [Parameter] public GridItem ViewModel { get; set; } = new GridItem();
+    [Parameter] public string? Size { get; set; }
+    public string Style => Size != null ? $"max-width: {Size};" : "";
+    [Parameter] public bool ShowText { get; set; }
+    [Parameter] public string? Width { get; set; }
+}

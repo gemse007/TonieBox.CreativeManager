@@ -1,0 +1,57 @@
+﻿@page "/admin/settings"
+
+@inject RepositoryService RepositoryService
+@inject TonieCloud.Login Login
+@inject UserService UserService
+
+<div>
+    Tonie User: <input type="text" @bind-value="@UserID" ><br/>
+    Tonie Password: <input type="password" @bind-value="@Password" >
+</div>
+<div>
+    @foreach (var user in users)
+    {
+            <div>
+            @user.Name
+                <button @onclick="() => UpdateCredit(user, -1)">-</button>
+            @user.Credits
+                <button @onclick="() => UpdateCredit(user, 1)">+</button>
+            </div>
+    }
+</div>
+@code {
+    PersistentData.GeneralSetting GeneralSettings = new PersistentData.GeneralSetting();
+    IEnumerable<PersistentData.User> users = new PersistentData.User[] { };
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadRepository();
+        users = await UserService.GetUsers();
+    }
+
+    private async Task LoadRepository()
+    {
+        GeneralSettings = await RepositoryService.GetGeneralSettings();
+        if (GeneralSettings.TonieUserID == null && Login.Email != null)
+        {
+            GeneralSettings.TonieUserID = Login.Email;
+            GeneralSettings.ToniePassword = Login.Password;
+            await SaveRepository();
+        }
+    }
+
+    private async Task SaveRepository()
+    {
+        await RepositoryService.SetGeneralSettings(GeneralSettings);
+    }
+
+    public string UserID { get => GeneralSettings.TonieUserID; set { GeneralSettings.TonieUserID = value; SaveRepository().Start(); } }
+    public string Password { get => GeneralSettings.ToniePassword; set { GeneralSettings.ToniePassword = value; SaveRepository().Start(); } }
+
+    async Task UpdateCredit(PersistentData.User user, int delta)
+    {
+        user.Credits += delta;
+
+        await UserService.SetCredits(user.Id, user.Credits);
+    }
+}

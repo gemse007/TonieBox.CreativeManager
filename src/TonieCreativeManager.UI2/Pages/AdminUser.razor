@@ -1,0 +1,263 @@
+﻿@page "/admin/user"
+@page "/admin/user/{ID}"
+
+@inject RepositoryService _RepositoryService
+@inject TonieCloudService _TonieCloudService
+@inject NavigationManager _NavigationManager
+@inject MediaService _MediaService
+@inject ISnackbar _Snackbar
+
+<PageTitle>User-Administration</PageTitle>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardContent>
+        <MudText Typo="Typo.h4">Userinformation</MudText>
+        @*<MudTextField @bind-Value="@UserItem.Id" Label="User ID" ReadOnly="true"/>*@
+        <MudTextField @bind-Value="UserItem.Name" Label="User Name" />
+        <MudAvatar Image="@UserItem.ProfileImageUrl"/>
+        <MudTextField @bind-Value="UserItem.ProfileImageUrl" Label="Image" HelperText="Select Image from Tonies below or enter URL"/>
+        <Grid Items="AllTonies" Size="50px"/>
+        <MudNumericField @bind-Value="UserItem.Credits" Label="Credits"/>
+        <MudNumericField @bind-Value="UserItem.UploadCost" Label="Upload Cost" HelperText="Credits to pay for one Tonie to upload"/>
+        <MudNumericField @bind-Value="UserItem.MediaCost" Label="Media Cost" HelperText="Credits to pay for one Folder to buy"/>
+        <MudCheckBox @bind-Checked="UserItem.ShowText" Label="User can read -> Show Text"/>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="SaveUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save User</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Delete User</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.ResetTv" OnClick="ResetUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Reset User</MudButton>
+    </MudCardActions>
+</MudCard>
+
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
+        <MudText Typo="Typo.h4">Tonies</MudText>
+        <MudSpacer/>
+            <MudButton OnClick="SetAllToniesOwned" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set all as owned</MudButton> 
+            <MudButton OnClick="SetNoTonieOwned" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set none as owned</MudButton> 
+        <MudSpacer/> 
+        <MudRadioGroup @bind-SelectedOption="TonieFilter">
+            <MudRadio Option="0">Show all</MudRadio>
+            <MudRadio Option="1">Filter owned</MudRadio>
+            <MudRadio Option="2">Filter not owend</MudRadio>
+        </MudRadioGroup>
+    </MudCardHeader>
+    <MudCardContent>
+        <Grid Items="Tonies" Size="50px" ShowText="true"/>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="SaveUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save User</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Delete User</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.ResetTv" OnClick="ResetUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Reset User</MudButton>
+    </MudCardActions>
+</MudCard>
+
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
+        <MudText Typo="Typo.h4">Media</MudText>
+        <MudSpacer/>
+            <MudButton OnClick="SetAllMediaBought" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set all as bought</MudButton> 
+            <MudButton OnClick="SetAllMediaAllowed" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set all as allowed</MudButton> 
+            <MudButton OnClick="SetNoMediaAllowed" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set none as allowed</MudButton> 
+        <MudSpacer/> 
+        <MudRadioGroup @bind-SelectedOption="MediaFilter">
+            <MudRadio Option="0">All Media</MudRadio>
+            <MudRadio Option="1">Bought Media</MudRadio>
+            <MudRadio Option="2">Allowed Media</MudRadio>
+            <MudRadio Option="3">Not allowed Media</MudRadio>
+        </MudRadioGroup>
+    </MudCardHeader>
+    <MudCardContent>
+        <Grid Items="Media" Size="150px" ShowText="true"/>
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="SaveUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save User</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.Delete" OnClick="DeleteUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Delete User</MudButton>
+        <MudButton StartIcon="@Icons.Material.Filled.ResetTv" OnClick="ResetUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Reset User</MudButton>
+    </MudCardActions>
+</MudCard>
+
+@code {
+    private int _TonieFilter = 0;
+    private int _MediaFilter = 0;
+    private int _MediaTodo = 0;
+    private IEnumerable<PersistentData.User> Users { get; set; } = new PersistentData.User[] { };
+    private PersistentData.User UserItem { get; set; } = new PersistentData.User();
+    private IEnumerable<TonieCloud.CreativeTonie> _Tonies { get; set; } = new TonieCloud.CreativeTonie[] { };
+    [Parameter] public string? ID { get; set; }
+    private int TonieFilter { get => _TonieFilter; set { _TonieFilter = value; StateHasChanged(); } }
+    private int MediaFilter { get => _MediaFilter; set { _MediaFilter = value; StateHasChanged(); } }
+    private int MediaTodo { get => _MediaTodo; set => _MediaTodo = value; }
+    private string _Path = "";
+    private MediaItem _MediaItem;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
+            var id = 0;
+            int.TryParse(ID, out id);
+            Users.FirstOrDefault(_ => _.Id == id)?.Clone(UserItem);
+            if (UserItem.Id == 0) UserItem.Id = id;
+            _Tonies = await _TonieCloudService.GetCreativeTonies() ?? new TonieCloud.CreativeTonie[] { };
+            _MediaItem = await _MediaService.GetMediaItemAsync(_Path);
+            StateHasChanged();
+        }
+        await base.OnAfterRenderAsync(firstRender);
+    }
+
+    public async void SaveUser()
+    {
+        await _RepositoryService.SetUser(UserItem);
+        _Snackbar.Add($"{UserItem.Name} Saved", Severity.Success);
+    }
+
+    public async void DeleteUser()
+    {
+        await _RepositoryService.DeleteUser(UserItem.Id);
+        _Snackbar.Add($"{UserItem.Name} Deleted", Severity.Success);
+    }
+
+    public void ResetUser()
+    {
+        var user = Users.FirstOrDefault(_ => _.Id == UserItem.Id);
+        if (user != null)
+            user.Clone(UserItem);
+        else
+            UserItem = new PersistentData.User { Id = UserItem.Id };
+    }
+
+    public void SetAllToniesOwned()
+    {
+        _Tonies.Where(_ => !UserItem.Tonies.Contains(_.Id)).ToList().ForEach(_ => UserItem.Tonies.Add(_.Id));
+    }
+
+    public void SetNoTonieOwned()
+    {
+        UserItem.Tonies.Clear();
+    }
+
+    public async Task SetAllMediaBought()
+    {
+        var data = await _MediaService.GetAllowableMediaItemAsync(_Path);
+        data.ToList().ForEach(_ =>
+        {
+            if (!UserItem.AllowedMedia.Contains(_.Id)) UserItem.AllowedMedia.Add(_.Id);
+            if (_.IsUploadable && !UserItem.BoughtMedia.Contains(_.Id)) UserItem.BoughtMedia.Add(_.Id);
+        });
+        (await _MediaService.GetParentItemsAsync(_Path)).ToList().ForEach(_ =>
+        {
+            if (!UserItem.AllowedMedia.Contains(_.Id)) UserItem.AllowedMedia.Add(_.Id);
+        });
+        StateHasChanged();
+    }
+
+    public async Task SetAllMediaAllowed()
+    {
+        var data = await _MediaService.GetAllowableMediaItemAsync(_Path);
+        data.ToList().ForEach(_ =>
+        {
+            if (!UserItem.AllowedMedia.Contains(_.Id)) UserItem.AllowedMedia.Add(_.Id);
+        });
+        (await _MediaService.GetParentItemsAsync(_Path)).ToList().ForEach(_ =>
+        {
+            if (!UserItem.AllowedMedia.Contains(_.Id)) UserItem.AllowedMedia.Add(_.Id);
+        });
+        StateHasChanged();
+    }
+
+    public async Task SetNoMediaAllowed()
+    {
+        (await _MediaService.GetAllowableMediaItemAsync(_Path)).ToList().ForEach(_ =>
+        {
+            if (UserItem.BoughtMedia.Contains(_.Id)) UserItem.BoughtMedia.Remove(_.Id);
+            if (UserItem.AllowedMedia.Contains(_.Id)) UserItem.AllowedMedia.Remove(_.Id);
+        });
+        StateHasChanged();
+    }
+    public void ToggleTonie(string tonieId)
+    {
+        if (UserItem.Tonies.Contains(tonieId))
+            UserItem.Tonies.Remove(tonieId);
+        else
+            UserItem.Tonies.Add(tonieId);
+        StateHasChanged();
+    }
+
+    public async void ChangeMediaPath(string path)
+    {
+        _Path = path;
+        _MediaItem = await _MediaService.GetMediaItemAsync(_Path);
+        StateHasChanged();
+    }
+
+    public async void ApplyActionToMediaItem(MediaItem mediaItem)
+    {
+        if (mediaItem.IsBoughtByUser(UserItem))
+            mediaItem.SetNotAllowed(UserItem);
+        else 
+        {
+            if (mediaItem.IsAllowedForUserToBuy(UserItem))
+                mediaItem.SetBougntByUser(UserItem);
+            else
+                mediaItem.SetAllowed(UserItem);
+            (await _MediaService.GetParentItemsAsync(mediaItem.Path)).ToList().ForEach(_ =>
+            {
+                if (!UserItem.AllowedMedia.Contains(_.Id)) UserItem.AllowedMedia.Add(_.Id);
+            });
+        }
+        StateHasChanged();
+    }
+
+    GridItem[] Tonies => _Tonies
+        .Where(_ => _TonieFilter == 0 || UserItem.Tonies.Contains(_.Id ?? "") == (_TonieFilter == 1))
+        .Select(_ => new GridItem
+            {
+                ImageUrl = _.ImageUrl,
+                OnClick = () => ToggleTonie(_.Id ?? ""),
+                Restricted = !UserItem.Tonies.Contains(_.Id ?? ""),
+                SubImageUrl = (UserItem.Tonies.Contains(_.Id ?? "") ? Icons.Material.Filled.Delete.ImageSvg() : Icons.Material.Filled.Add.ImageSvg())
+            }).ToArray();
+
+    GridItem[] AllTonies => _Tonies
+        .Select(_ => new GridItem
+            {
+                ImageUrl = _.ImageUrl,
+                OnClick = () =>
+            {
+                        UserItem.ProfileImageUrl = _.ImageUrl;
+                        StateHasChanged();
+                    }
+            }).ToArray();
+
+    GridItem[]? Media => _MediaItem
+        ?.Childs
+        ?.Append(null)
+        .Where(_ =>
+            (_ == null && _Path != "")
+            || (_ != null
+                && (_MediaFilter == 0
+                    || (_MediaFilter == 1 && (!_.IsUploadable || _.IsBoughtByUser(UserItem)))
+                    || (_MediaFilter == 2 && _.IsAllowedForUserToBuy(UserItem))
+                    || (_MediaFilter == 3 && !_.IsAllowedForUserToBuy(UserItem))
+                )))
+        .OrderBy(_ => _?.Path)
+        .Select(_ =>
+        {
+            var pathEncoded = _?.Path.EncodeUrl() ?? "folder";
+            return new GridItem
+                {
+                    ImageUrl = $"/cover?path={pathEncoded}",
+                    Name = _?.Name,
+                    SubLeftImageUrl = (_ != null && !_.IsUploadable && _.Childs.Any(_ => _.TotalSize > 0))
+                        ? $"/cover?path=folder"
+                        : null,
+                    SubImageUrl = _ == null ? null
+                            : _.IsBoughtByUser(UserItem) ? Icons.Material.Filled.Delete.ImageSvg()
+                            : _.IsAllowedForUserToBuy(UserItem) ? Icons.Material.Filled.ShoppingCart.ImageSvg()
+                            : Icons.Material.Filled.Add.ImageSvg(),
+                    OnClick = _ == null ? () => ChangeMediaPath(System.IO.Path.GetDirectoryName(_Path)) : ((_ != null && !_.IsUploadable && _.Childs.Any(_ => _.TotalSize > 0)) ? () => ChangeMediaPath(_.Path) : () => ApplyActionToMediaItem(_)),
+                    OnSubClick = _ != null ? () => ApplyActionToMediaItem(_) : null,
+                };
+        }).ToArray();
+}

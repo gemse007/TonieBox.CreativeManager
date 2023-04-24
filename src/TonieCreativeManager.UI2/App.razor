@@ -1,0 +1,55 @@
+﻿@inject TokenProvider TokenProvider
+@inject IEnumerable<PersistentData.User> Users
+@inject NavigationManager NavigationManager
+@inject TonieCloudService TonieCloudService
+
+<Router AppAssembly="@typeof(App).Assembly">
+    <Found Context="routeData">
+        @if (!Redirect(routeData))
+        {
+                <RouteView RouteData="@routeData" DefaultLayout="@typeof(MainLayout)" />
+        }
+        @*<FocusOnNavigate RouteData="@routeData" Selector="h1" />*@
+    </Found>
+    <NotFound>
+        <PageTitle>Not found</PageTitle>
+        <LayoutView Layout="@typeof(MainLayout)">
+            <p role="alert">Sorry, there's nothing at this address.</p>
+        </LayoutView>
+    </NotFound>
+</Router>
+
+@code {
+    [Parameter]
+    public InitialApplicationState InitialState { get; set; }
+
+    protected override void OnInitialized()
+    {
+        TokenProvider.SelectedUser = InitialState.SelectedUser;
+        base.OnInitialized();
+    }
+
+    protected bool Redirect(RouteData routeData)
+    {
+        try
+        {
+            if (routeData.PageType != typeof(Pages.AdminSettings) && routeData.PageType != typeof(Pages.AdminUser))
+            {
+                if (Users?.Count() == 0)
+                {
+                    NavigationManager.NavigateTo("/settings");
+                    return true;
+                }
+                if (routeData.PageType != typeof(Pages.UserSelect))
+                    if (Users?.FirstOrDefault(_ => _.Id == InitialState.SelectedUser) == null)
+                    {
+                        NavigationManager.NavigateTo("/userselect");
+                        return true;
+                    }
+            }
+        }
+        catch { }
+        base.OnInitialized();
+        return false;
+    }
+}

@@ -22,14 +22,14 @@ namespace TonieCreativeManager.Service
             return vouchers.Any(v => v.Code == code && v.Used == null);
         }
 
-        public async Task<PersistentData.Voucher> Redeem(string code)
+        public async Task<PersistentData.Voucher> Redeem(Guid id)
         {
             var vouchers = await repositoryService.GetVouchers();
-            var voucher = vouchers.FirstOrDefault(v => v.Code == code && v.Used == null);
+            var voucher = vouchers.FirstOrDefault(v => v.Id == id && v.Used == null);
 
             if (voucher == null)
             {
-                throw new Exception($"Unable to redeem voucher '{code}'");
+                throw new Exception($"Unable to redeem voucher '{id}'");
             }
 
             voucher.Used = DateTime.Now;
@@ -39,12 +39,12 @@ namespace TonieCreativeManager.Service
             return voucher;
         }
 
-        public Task<IEnumerable<PersistentData.Voucher>> GetVouchers() => repositoryService.GetVouchers();
+        public Task<IEnumerable<PersistentData.Voucher>?> GetVouchers() => repositoryService.GetVouchers();
         
         public async Task ResetVouchers()
         {
             var vouchers = await repositoryService.GetVouchers();
-
+            if (vouchers == null) return;
             foreach (var voucher in vouchers)
             {
                 voucher.Used = null;

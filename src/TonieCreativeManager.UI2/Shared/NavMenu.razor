@@ -1,0 +1,52 @@
+﻿@inject PersistentData.User SelectedUser
+@inject UploadService UploadService
+@inject NavigationManager NavigationManager
+<MudAppBar Fixed="true" Dense="true">
+    <MudPaper Elevation="0" Class="d-flex flex-wrap" Width="100%">
+    <MudPaper Elevation="0" Class="d-flex justify-space-around" Width="100%">
+            <MudIconButton Href="javascript:history.back();" Icon="fas fa-chevron-circle-left" Color="Color.Primary" />
+            <MudIconButton Href="/media" Icon="fas fa-compact-disc"  Color="Color.Primary"/>
+            <MudIconButton Href="/tonies" Icon="fab fa-github-alt"  Color="Color.Primary"/>
+            <MudBadge Content="@SelectedUser?.Credits" Color="Color.Primary" Overlap="true" Origin="Origin.CenterRight" Visible="SelectedUser?.Id != 0">
+                <MudIconButton Href="/voucher" Icon="fas fa-coins"  Color="Color.Primary"/>
+            </MudBadge>
+            <MudButton Href="/userselect"><MudAvatar Image="@SelectedUser?.ProfileImageUrl"  Color="Color.Primary"/></MudButton>
+            @*<MudIconButton Href="/settings" Icon="fas fa-compact-disc" />*@
+            <MudCheckBox Disabled="@(SelectedUser.Id == 0)" @bind-Checked="@ManageHiddenFolders" CheckedIcon="@Icons.Material.Filled.Favorite" UncheckedIcon="@Icons.Material.Filled.FavoriteBorder" />
+    </MudPaper>
+    @if (_Progress != null)
+    {
+        <MudPaper Elevation="0" Class="d-flex" Width="100%">
+                <MudProgressLinear Min="0" Max="100" Value="_Progress.Value" />
+        </MudPaper>
+    }
+    </MudPaper>
+</MudAppBar>
+
+@code {
+    private int? _Progress;
+    private bool ManageHiddenFolders { get => SelectedUser?.ShowHidden ?? false; set { SelectedUser.ShowHidden = value; NavigationManager.NavigateTo(NavigationManager.Uri, true); } }
+    protected override void OnAfterRender(bool firstRender)
+    {
+        GetProgress();
+        if (_Progress != null)
+            UpdateProgress();
+        base.OnAfterRender(firstRender);
+    }
+
+    private void GetProgress()
+    {
+        var progress = UploadService.GetProgress();
+        _Progress = progress == null ? null : (int?)(progress * 100.0);
+    }
+
+    private async Task UpdateProgress()
+    {
+        while (_Progress != null)
+        {
+            await Task.Delay(1000);
+            GetProgress();
+            StateHasChanged();
+        }
+    }
+}

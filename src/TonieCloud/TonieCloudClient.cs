@@ -10,6 +10,7 @@ using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using System.Web;
 
@@ -20,90 +21,79 @@ namespace TonieCloud
         private const string TONIE_API_URL = "https://api.tonie.cloud";
         private const string AMAZON_UPLOAD_URL = "https://bxn-toniecloud-prod-upload.s3.amazonaws.com";
         private const string TONIE_AUTH_URL = "https://login.tonies.com";
-        private readonly Login login;
-        private readonly HttpClient client;
-        private readonly JsonSerializerSettings jsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+        private Login _Login;
+        private readonly HttpClient _Client;
+        private readonly JsonSerializerSettings _JsonSettings = new JsonSerializerSettings { ContractResolver = new CamelCasePropertyNamesContractResolver() };
+        private readonly SemaphoreSlim _Semaphore;
 
-        public TonieCloudClient(Login login)
+        public TonieCloudClient(Login login, int maxParallelFileUploades)
         {
-            this.login = login;
-
-            client = new HttpClient
-            {
-                BaseAddress = new Uri(TONIE_API_URL),
-            };
+            _Login = login;
+            _Client = new HttpClient { BaseAddress = new Uri(TONIE_API_URL) };
+            _Semaphore = new SemaphoreSlim(maxParallelFileUploades, maxParallelFileUploades);
         }
 
-        public Task<Household[]> GetHouseholds() => Get<Household[]>("/v2/households");
-        
-        public Task<CreativeTonie[]> GetCreativeTonies(string householdId) => Get<CreativeTonie[]>($"/v2/households/{householdId}/creativetonies");
-        
-        public Task<CreativeTonie> GetCreativeTonie(string householdId, string creativeTonieId) => Get<CreativeTonie>($"/v2/households/{householdId}/creativetonies/{creativeTonieId}");
+        public Login Login { get => _Login; set => _Login = value; }
 
-        public Task<Toniebox[]> GetTonieboxes(string householdId) => Get<Toniebox[]>($"/v2/households/{householdId}/tonieboxes");
+        public Task<Household[]?> GetHouseholds() => Get<Household[]>("/v2/households");
 
-        public async Task<AmazonToken> UploadFile(Stream file)
+        public Task<CreativeTonie[]?> GetCreativeTonies(string householdId) => Get<CreativeTonie[]>($"/v2/households/{householdId}/creativetonies");
+
+        public Task<CreativeTonie?> GetCreativeTonie(string householdId, string creativeTonieId) => Get<CreativeTonie>($"/v2/households/{householdId}/creativetonies/{creativeTonieId}");
+
+        public Task<Toniebox[]?> GetTonieboxes(string householdId) => Get<Toniebox[]>($"/v2/households/{householdId}/tonieboxes");
+
+        public async Task<AmazonToken> UploadFile(Stream file, IProgress<long> progress)
         {
-            // get upload token
-            var amazonFile = await Post<AmazonToken>("/v2/file", new ByteArrayContent(new byte[] { }));
-
-            // create payload
-            var payload = new MultipartContent("form-data");
-            payload.AddFormContent("key", amazonFile.Request.Fields.Key);
-            payload.AddFormContent("x-amz-algorithm", amazonFile.Request.Fields.AmazonAlgorithm);
-            payload.AddFormContent("x-amz-credential", amazonFile.Request.Fields.AmazonCredential);
-            payload.AddFormContent("x-amz-date", amazonFile.Request.Fields.AmazonDate);
-            payload.AddFormContent("policy", amazonFile.Request.Fields.Policy);
-            payload.AddFormContent("x-amz-signature", amazonFile.Request.Fields.AmazonSignature);
-            payload.AddFormContent("x-amz-security-token", amazonFile.Request.Fields.AmazonSecurityToken);
-            payload.AddStreamContent("file", amazonFile.FileId, file, "application/octet-stream");
-
-            // upload to S3
-            var response = await new HttpClient().PostAsync(AMAZON_UPLOAD_URL, payload);
-
-            if (!response.IsSuccessStatusCode)
+            try
             {
-                throw new Exception("Error while upload to Amazon S3");
+                await _Semaphore.WaitAsync();
+
+                // get upload token
+                var amazonFile = await Post<AmazonToken>("/v2/file", new ByteArrayContent(new byte[] { }));
+                if (amazonFile == null)
+                    throw new Exception("Error retrieving AmazonToken in UploadFile");
+                // create payload
+                var payload = new MultipartContent("form-data");
+                payload.AddFormContent("key", amazonFile.Request?.Fields?.Key ?? "");
+                payload.AddFormContent("x-amz-algorithm", amazonFile.Request?.Fields?.AmazonAlgorithm ?? "");
+                payload.AddFormContent("x-amz-credential", amazonFile.Request?.Fields?.AmazonCredential ?? "");
+                payload.AddFormContent("x-amz-date", amazonFile.Request?.Fields?.AmazonDate ?? "");
+                payload.AddFormContent("policy", amazonFile.Request?.Fields?.Policy ?? "");
+                payload.AddFormContent("x-amz-signature", amazonFile.Request?.Fields?.AmazonSignature ?? "");
+                payload.AddFormContent("x-amz-security-token", amazonFile.Request?.Fields?.AmazonSecurityToken ?? "");
+                payload.AddStreamContent("file", amazonFile.FileId ?? "", file, "application/octet-stream");
+
+                // upload to S3
+                var response = new HttpClient().PostAsync(AMAZON_UPLOAD_URL, payload);
+                while (!response.IsCompleted)
+                {
+                    await Task.Delay(1000);
+                    if (progress != null)
+                        progress.Report(file.Position);
+                }
+
+                if (!response.Result.IsSuccessStatusCode)
+                {
+                    throw new Exception("Error while upload to Amazon S3");
+                }
+
+                return amazonFile;
             }
-
-            return amazonFile;
+            finally
+            {
+                _Semaphore.Release();
+            }
         }
 
-        public Task<CreativeTonie> PatchCreativeTonie(string householdId, string creativeTonieId, string name, IEnumerable<Chapter> chapters)
+        public Task<CreativeTonie?> PatchCreativeTonie(string householdId, string creativeTonieId, string name, IEnumerable<Chapter> chapters)
         {
-            var payload = new 
-            { 
+            var payload = new
+            {
                 chapters = chapters,
                 name = name
             };
-
             return Patch<CreativeTonie>($"/v2/households/{householdId}/creativetonies/{creativeTonieId}", payload);
-        }
-
-        public async Task<CreativeTonie> UploadFilesToCreateiveTonie(UploadFilesToCreateiveTonieRequest request)
-        {
-            // upload files
-            async Task uploadFile(UploadFilesToCreateiveTonieRequest.Entry entry)
-            {
-                var fileToken = await UploadFile(entry.File);
-
-                entry.FileId = fileToken.FileId;
-            }
-
-            // execute uploads
-            await Task.WhenAll(request.Entries.Select(uploadFile).ToArray());
-
-            var chapters = request.Entries
-                .Select(entry => new Chapter
-                {
-                    File = entry.FileId,
-                    Id = entry.FileId,
-                    Title = entry.Name
-                })
-                .ToArray();
-
-            // patch creative tonies
-            return await PatchCreativeTonie(request.HouseholdId, request.CreativeTonieId, request.TonieName, chapters);
         }
 
         private async Task UpdateJwtToken()
@@ -126,14 +116,17 @@ namespace TonieCloud
             var loginRequestData = new Dictionary<string, string>() {
                 { "grant_type", "password" },
                 { "client_id", "my-tonies" },
-                { "username", login.Email },
-                { "password", login.Password }
+                { "username", _Login.Email ?? "" },
+                { "password", _Login.Password ?? "" }
             };
 
             var loginResponse = await authClient.SendAsync(new HttpRequestMessage(HttpMethod.Post, loginUrl) { Content = new FormUrlEncodedContent(loginRequestData) });
 
             // extract auth code from redirect url
             var auth = QueryHelpers.ParseQuery(loginResponse.RequestMessage.RequestUri.Query);
+
+            if (!auth.ContainsKey("code"))
+                throw new Exception("Login failed!");
 
             // get access token
             var tokenRequestData = new Dictionary<string, string>() {
@@ -142,34 +135,44 @@ namespace TonieCloud
                 { "client_id", "my-tonies" },
                 { "redirect_uri", "https://my.tonies.com/login" }
             };
-            
+
             var tokenResponse = await authClient.SendAsync(new HttpRequestMessage(HttpMethod.Post, "/auth/realms/tonies/protocol/openid-connect/token") { Content = new FormUrlEncodedContent(tokenRequestData) });
 
             var token = JsonConvert.DeserializeObject<Token>(await tokenResponse.Content.ReadAsStringAsync());
 
             // set authorization
-            client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token.AccessToken);
+            _Client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token?.AccessToken ?? "");
         }
 
-        private Task<T> Get<T>(string path) => ExecuteRequest<T>(() => client.GetAsync(path));
-        
-        private Task<T> Post<T>(string path, HttpContent content) => ExecuteRequest<T>(() => client.PostAsync(path, content));
+        private Task<T?> Get<T>(string path) where T : class => ExecuteRequest<T>(() => _Client.GetAsync(path)); 
 
-        private Task<T> Patch<T>(string path, object content)
+        private Task<T?> Post<T>(string path, HttpContent content) where T : class => ExecuteRequest<T>(() => _Client.PostAsync(path, content));
+
+        private Task<T?> Patch<T>(string path, object content) where T : class 
         {
-            var payload = new StringContent(JsonConvert.SerializeObject(content, jsonSettings), Encoding.UTF8, "application/json");
-
-            return ExecuteRequest<T>(() => client.PatchAsync(path, payload));
+            var payload = new StringContent(JsonConvert.SerializeObject(content, _JsonSettings), Encoding.UTF8, "application/json");
+            Console.WriteLine(JsonConvert.SerializeObject(content, _JsonSettings));
+            return ExecuteRequest<T>(() => _Client.PatchAsync(path, payload));
         }
 
-        private async Task<T> ExecuteRequest<T>(Func<Task<HttpResponseMessage>> action)
+        private async Task<T?> ExecuteRequest<T>(Func<Task<HttpResponseMessage>> action) where T : class
         {
-            if (client.DefaultRequestHeaders.Authorization == null)
+            if (_Client.DefaultRequestHeaders.Authorization == null)
             {
-                await UpdateJwtToken();
+                try
+                {
+                    await UpdateJwtToken();
+                }
+                catch {
+                    return default(T);
+                }
             }
-
-            var response = await action.Invoke();
+            HttpResponseMessage response = null;
+            try
+            {
+                response = await action.Invoke();
+            }
+            catch { }
 
             // refresh jwt token in case of 401
             if (response.StatusCode == HttpStatusCode.Unauthorized)
@@ -186,7 +189,7 @@ namespace TonieCloud
                 throw new Exception($"Request failed with {response.StatusCode}: {content}");
             }
 
-            return JsonConvert.DeserializeObject<T>(content);
+            return JsonConvert.DeserializeObject<T>(content ?? "") ?? Activator.CreateInstance<T>();
         }
     }
 }

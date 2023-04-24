@@ -1,0 +1,43 @@
+﻿@page "/"
+@inject TonieCloudService _TonieCloudService
+@inject NavigationManager _NavigationManager
+@inject IEnumerable<PersistentData.User> Users
+@inject PersistentData.User SelectedUser
+@inject ISnackbar _Snackbar
+
+<PageTitle>Welcome to the world of Tonie</PageTitle>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
+        <MudText Typo="Typo.h4">Hello @SelectedUser?.Name!</MudText>
+    </MudCardHeader>
+</MudCard>
+
+@code {
+
+    protected override async void OnAfterRender(bool firstRender)
+    {
+        if (Users == null || Users.Count() == 0)
+        {
+            _NavigationManager.NavigateTo("/settings", true);
+            return;
+        }
+        else
+        {
+            bool loggedin = false;
+            try
+            {
+                var h = await _TonieCloudService.GetHouseholds();
+                loggedin = h?.Count() > 0;
+            }
+            catch { }
+            if (!loggedin)
+            {
+                _Snackbar.Add("Login to MyTonieCloud didn't work -> check your credentials!");
+                _NavigationManager.NavigateTo("/settings", true);
+            }
+            else
+                _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 ? "/userselect" : "/media", true);
+            return;
+        }
+    }
+}
