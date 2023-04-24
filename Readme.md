@@ -8,7 +8,7 @@ surf to /settings page to manage
 - Userdata (Name, Picture, Credits, Media -> Not Allowed / Allowed / Bought, ShowText (if the child can read))
 - Vouchers
 
-To Start you don't have to use docker anymore. You can just install .net core 6.0 Hosting Bundle from https://dotnet.microsoft.com/en-us/download/dotnet/6.0 download the publish folder, adjust the appsettings.json and Start the TonieCreativeManager.UI2.exe
+To Start you don't have to use docker anymore. You can just install .net core 6.0 Hosting Bundle from https://dotnet.microsoft.com/en-us/download/dotnet/6.0 download all files from the publish folder https://github.com/gemse007/TonieBox.CreativeManager/tree/master/publish/PubRelease/net6.0/publish, adjust the appsettings.json and Start the TonieCreativeManager.UI2.exe
 The only settings outside the /settings page are in the appsettings.json the Entries Settings/LibraryRoot which should show to the RootFolder and RepositoryDataFile which holds the data. 
 If you want to run it as a service you can use powershell in Windows and use following Command (executed in Adminstration Mode)
 New-Service -Name TonieBox -BinaryPathName pathto\TonieCreativeManager.UI2.exe
