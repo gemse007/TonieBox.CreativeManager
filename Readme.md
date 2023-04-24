@@ -1,3 +1,6 @@
+# Credits
+This branch / software is based on MWinkler's work https://github.com/mwinkler/TonieBox.CreativeManager/ -> all the credits to him!
+
 # Latest Changes
 surf to /settings page to manage
 - TonieCloud Credentials
