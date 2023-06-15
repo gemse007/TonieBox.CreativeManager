@@ -91,8 +91,10 @@ namespace TonieCloud
             var payload = new
             {
                 chapters = chapters,
-                name = name
+                name = name?.Substring(0, name.Length > 100 ? 100 : 100)
             };
+            foreach (var c in payload.chapters)
+                c.Title = c.Title?.Substring(0, c.Title.Length > 100 ? 100: c.Title.Length);
             return Patch<CreativeTonie>($"/v2/households/{householdId}/creativetonies/{creativeTonieId}", payload);
         }
 
