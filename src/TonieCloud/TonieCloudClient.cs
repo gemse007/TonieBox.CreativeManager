@@ -91,7 +91,7 @@ namespace TonieCloud
             var payload = new
             {
                 chapters = chapters,
-                name = name?.Substring(0, name.Length > 100 ? 100 : 100)
+                name = name?.Substring(0, name.Length > 100 ? 100 : name.Length)
             };
             foreach (var c in payload.chapters)
                 c.Title = c.Title?.Substring(0, c.Title.Length > 100 ? 100: c.Title.Length);
