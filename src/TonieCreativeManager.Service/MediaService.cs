@@ -8,6 +8,7 @@ using System.Reflection;
 using System.Runtime;
 using System.Security.Cryptography;
 using System.Threading.Tasks;
+using System.Xml.Linq;
 using TonieCreativeManager.Service.Model;
 
 namespace TonieCreativeManager.Service
@@ -171,7 +172,16 @@ namespace TonieCreativeManager.Service
                 })
                 .OrderBy(p => p.Name)
                 .ToArray();
-
+            parent?.Childs?.Where(_=>_.IsFile && !files.Any(__=>__.Name == _.Name)).ToList().ForEach(_ => {
+                var subpath = Path.Combine(parent.Path, _.Name);
+                if (_Cache.ContainsKey(subpath)) _Cache.Remove(subpath);
+                haschanged = true;
+            });
+            parent?.Childs?.Where(_ => _.IsDirectory && !directory.Any(__ => __.Name == _.Name)).ToList().ForEach(_ => {
+                var subpath = Path.Combine(parent.Path, _.Name);
+                if (_Cache.ContainsKey(subpath)) _Cache.Remove(subpath);
+                haschanged = true;
+            });
             if (haschanged || parent.Childs == null)
             {
                 parent.Childs = directory.Concat(files).ToArray();
