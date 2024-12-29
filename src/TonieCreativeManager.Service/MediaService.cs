@@ -115,6 +115,10 @@ namespace TonieCreativeManager.Service
             bool haschanged = false;
             await Task.Delay(0);
             var fullpath = Path.Combine(_Settings.LibraryRoot, parent.Path);
+            if (!Directory.Exists(fullpath)) {
+                if (_Cache.ContainsKey(parent.Path)) _Cache.Remove(parent.Path);
+                return true;
+            }
             var files = Directory.GetFiles(fullpath)
                 .Where(_ => _Settings.MediaFileExtensions.Contains(Path.GetExtension(_)))
                 .Select(filepath =>
