@@ -4,6 +4,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Hosting.WindowsServices;
 using Microsoft.JSInterop;
 using MudBlazor.Services;
+using System.Runtime.InteropServices;
 using TonieCloud;
 using TonieCreativeManager.Service;
 using TonieCreativeManager.Service.Model;
@@ -53,8 +54,21 @@ namespace TonieCreativeManager.UI2
             var app = builder.Build();
             Task.Run(async () =>
             {
-                if (app.Services.GetService<Settings>()?.LibraryRoot != null)
+                var lib = Environment.GetEnvironmentVariable("MEDIA_LIBRARY");
+                Console.WriteLine($"MEDIA_LIBRARY: {lib}");
+                var settings = app.Services.GetService<Settings>() ?? new Settings();
+                if (!string.IsNullOrEmpty(lib))
+                {
+                    settings.LibraryRoot = lib;
+                }
+                settings.LibraryRoot = settings.LibraryRoot?.TrimEnd('\\').TrimEnd('/');
+                if (settings.LibraryRoot != null)
+                {
+                    settings.RepositoryDataFile = Path.Combine(settings.LibraryRoot, settings.RepositoryDataFile ?? "data.json");
+                    Console.WriteLine($"Using LibraryRoot: {settings.LibraryRoot}");
+                    Console.WriteLine($"Using Repository: {settings.RepositoryDataFile}");
                     await (app.Services.GetService<MediaService>()?.GetMediaItemAsync("") ?? Task.CompletedTask);
+                }
             });
             // Configure the HTTP request pipeline.
             if (!app.Environment.IsDevelopment())

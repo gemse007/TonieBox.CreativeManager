@@ -406,7 +406,10 @@
           "Newtonsoft.Json": "13.0.1"
         },
         "runtime": {
-          "TonieCloud.dll": {}
+          "TonieCloud.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       },
       "TonieCreativeManager.Service/1.0.0": {
@@ -415,7 +418,10 @@
           "TonieCloud": "1.0.0"
         },
         "runtime": {
-          "TonieCreativeManager.Service.dll": {}
+          "TonieCreativeManager.Service.dll": {
+            "assemblyVersion": "1.0.0",
+            "fileVersion": "1.0.0.0"
+          }
         }
       }
     }

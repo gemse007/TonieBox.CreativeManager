@@ -20,7 +20,7 @@ namespace TonieCreativeManager.Ui2.Pages
         {
             var path = Request.Query["path"];
 
-            var cover = await mediaService.GetCoverAsync(path);
+            var cover = await mediaService.GetCoverAsync(path.ToString().DecodeUrl());
             
             return new FileStreamResult(cover.Data, new MediaTypeHeaderValue(cover.MimeType));
         }

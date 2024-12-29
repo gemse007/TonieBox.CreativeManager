@@ -84,16 +84,16 @@ namespace TonieCreativeManager.Service
                 }
                 await _ReadItems;
             }
-            if (_Cache[path].IsDirectory && await GetItemsAsync(_Cache[path]))
+            if (_Cache.ContainsKey(path) && _Cache[path].IsDirectory && await GetItemsAsync(_Cache[path]))
             {
                 await _RepositoryService.SetMediaItems(_Cache.Values.ToList());
             }
-            if (await CalculateApproximateDurationAsync(_Cache[path]))
+            if (_Cache.ContainsKey(path) && await CalculateApproximateDurationAsync(_Cache[path]))
             {
                 await _RepositoryService.SetMediaItems(_Cache.Values.ToList());
             }
 
-            return _Cache[path];
+            return _Cache.ContainsKey(path) ? _Cache[path] : null;
         }
         //If MediaItem is Mp3File -> Calculate Length, If Is Directory Create Sum
         private async Task<bool> CalculateApproximateDurationAsync(MediaItem mi)
@@ -226,7 +226,7 @@ namespace TonieCreativeManager.Service
         }
         private Task<string?> TryGetCoverPathAsync(string path)
         {
-            var fullPath = _Settings.LibraryRoot + path;
+            var fullPath = Path.Combine(_Settings.LibraryRoot, path);
             var files = Directory.GetFiles(fullPath);
 
             // specific cover files

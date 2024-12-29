@@ -216,7 +216,8 @@ namespace TonieCreativeManager.Service
                                     }
                                 });
                             files.Where(entry => entry.Chapter == null
-                                    && (entry.UploadTask?.IsCompletedSuccessfully ?? false))
+                                    && (entry.UploadTask?.IsCompletedSuccessfully ?? false)
+                                    && entry.UploadTask.Result != null)
                                 .ToList()
                                 .ForEach(entry =>
                                     entry.Chapter = new Chapter()

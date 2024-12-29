@@ -89,7 +89,7 @@
             _Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
             await LoadVouchers();
             Users = _Users
-                .Select(_ => new GridItem { ImageUrl = _.ProfileImageUrl, Name = _.Name, Url = $"/admin/user/{_.Id}" })
+                .Select(_ => new GridItem { ImageUrl = _.ProfileImageUrl, Name = _.Name, Url = $"/settings/user/{_.Id}" })
                 .ToArray();
             StateHasChanged();
         }
@@ -121,7 +121,7 @@
     public void AddUser()
     {
         var id = (_Users?.Count() == 0) ? 1 : _Users.Max(_ => _.Id) + 1;
-        _NavigationManager.NavigateTo($"/admin/user/{id}", true);
+        _NavigationManager.NavigateTo($"/settings/user/{id}", true);
     }
 
     public void AddVoucher()
