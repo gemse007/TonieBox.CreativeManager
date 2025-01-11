@@ -21,5 +21,6 @@ namespace TonieCreativeManager.Service.Model
         public string Name { get; }
         public MediaItem[] Files { get; }
         public bool Append { get; }
+        public List<string> Errors { get; } = new List<string>();
     }
 }

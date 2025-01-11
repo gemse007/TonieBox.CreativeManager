@@ -33,6 +33,12 @@ namespace TonieCloud
             _Semaphore = new SemaphoreSlim(maxParallelFileUploades, maxParallelFileUploades);
         }
 
+        private void LogInfo(string message)
+        {
+#if DEBUG
+            Console.WriteLine(message);
+#endif
+        }
         public Login Login { get => _Login; set => _Login = value; }
 
         public Task<Household[]?> GetHouseholds() => Get<Household[]>("/v2/households");
@@ -43,16 +49,16 @@ namespace TonieCloud
 
         public Task<Toniebox[]?> GetTonieboxes(string householdId) => Get<Toniebox[]>($"/v2/households/{householdId}/tonieboxes");
 
-        public async Task<AmazonToken> UploadFile(Stream file, IProgress<long> progress)
+        public async Task<AmazonToken> UploadFile(Stream file, IProgress<long> progress, string fullpath)
         {
             try
             {
                 await _Semaphore.WaitAsync();
-
                 // get upload token
                 var amazonFile = await Post<AmazonToken>("/v2/file", new ByteArrayContent(new byte[] { }));
                 if (amazonFile == null)
                     throw new Exception("Error retrieving AmazonToken in UploadFile");
+                LogInfo($"FileUploadStarting {fullpath} {amazonFile.FileId}");
                 // create payload
                 var payload = new MultipartContent("form-data");
                 payload.AddFormContent("key", amazonFile.Request?.Fields?.Key ?? "");
@@ -75,9 +81,9 @@ namespace TonieCloud
 
                 if (!response.Result.IsSuccessStatusCode)
                 {
-                    throw new Exception("Error while upload to Amazon S3");
+                    throw new Exception($"Error while upload to Amazon S3");
                 }
-
+                LogInfo($"FileUploadStarting {fullpath} {amazonFile.FileId}");
                 return amazonFile;
             }
             finally
@@ -153,7 +159,7 @@ namespace TonieCloud
         private Task<T?> Patch<T>(string path, object content) where T : class 
         {
             var payload = new StringContent(JsonConvert.SerializeObject(content, _JsonSettings), Encoding.UTF8, "application/json");
-            Console.WriteLine(JsonConvert.SerializeObject(content, _JsonSettings));
+            LogInfo(JsonConvert.SerializeObject(content, _JsonSettings));
             return ExecuteRequest<T>(() => _Client.PatchAsync(path, payload));
         }
 
@@ -190,6 +196,7 @@ namespace TonieCloud
             {
                 throw new Exception($"Request failed with {response.StatusCode}: {content}");
             }
+            LogInfo(JsonConvert.SerializeObject(content, _JsonSettings));
 
             return JsonConvert.DeserializeObject<T>(content ?? "") ?? Activator.CreateInstance<T>();
         }

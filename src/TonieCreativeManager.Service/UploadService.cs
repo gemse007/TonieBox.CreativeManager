@@ -34,14 +34,15 @@ namespace TonieCreativeManager.Service
             public Task<AmazonToken?>? UploadTask { get; set; }
             public Chapter? Chapter { get; set; }
         }
-        private readonly RepositoryService _RepositoryService; 
+        private readonly RepositoryService _RepositoryService;
         private readonly TonieCloudClient _TonieCloudClient;
         private readonly TonieCloudService _TonieCloudService;
         private readonly MediaService _MediaService;
         private readonly Settings _Settings;
         private List<UploadJobProgress> _Jobs = new List<UploadJobProgress>();
         private Task? _UploadTask;
-        
+        private List<string> _Errors = new List<string>();
+
         public UploadService(TonieCloudClient tonieCloudClient, MediaService mediaService, Settings settings, TonieCloudService tonieCloudService, RepositoryService repositoryService)
         {
             _TonieCloudClient = tonieCloudClient;
@@ -55,6 +56,15 @@ namespace TonieCreativeManager.Service
         {
             if (_Jobs.Count == 0) return null;
             return 1.0 * _Jobs.Sum(_ => _.ByesDone) / _Jobs.Sum(_ => _.TotalBytes);
+        }
+        public string[] GetErrors()
+        {
+            lock (_Errors)
+            {
+                var ret = _Errors.ToArray();
+                _Errors.Clear();
+                return ret;
+            }
         }
         public void AddJob(UploadJob job)
         {
@@ -99,6 +109,9 @@ namespace TonieCreativeManager.Service
                 }
                 finally
                 {
+                    if (job.Job.Errors.Count > 0)
+                        lock (_Errors)
+                            _Errors.AddRange(job.Job.Errors);
                     lock (_Jobs)
                         _Jobs.Remove(job);
                 }
@@ -123,9 +136,9 @@ namespace TonieCreativeManager.Service
                 while (ix < files.Length && chr > 0)
                 {
                     var file = files[ix];
-                    var duration = file.Chapter?.Seconds > 0 ? file.Chapter.Seconds : (file.MediaItem.Duration ?? file.MediaItem.ApproximateDuration ?? 0);
+                    var duration = file.Chapter?.Seconds > 0 ? file.Chapter.Seconds.Value : (file.MediaItem.Duration ?? file.MediaItem.ApproximateDuration ?? 0);
                     if (sr < duration) break;
-                    if (file.Chapter != null)
+                    if (file.Chapter?.File != null)
                     {
                         chap.Add(file.Chapter);
                     }
@@ -165,15 +178,17 @@ namespace TonieCreativeManager.Service
                             var stream = File.OpenRead(fullpath);
                             while (retry < 3)
                             {
-                                var r = _TonieCloudClient.UploadFile(stream, progress);
                                 try
                                 {
-                                    if (r.Wait(120000) && r.IsCompletedSuccessfully)
-                                    {
+                                    var r = _TonieCloudClient.UploadFile(stream, progress, fullpath);
+                                    r.Wait();
+                                    if (r.IsCompletedSuccessfully)
                                         return r.Result;
-                                    }
                                 }
-                                catch { }
+                                catch
+                                {
+                                    job.Job.Errors.Add($"Error uploading {fullpath} retry {retry}");
+                                }
                                 stream.Position = 0;
                                 retry++;
                             }
@@ -183,13 +198,15 @@ namespace TonieCreativeManager.Service
                     };
                 }).ToArray();
                 CreativeTonie[]? tonieinfo = null;
-                while (files.Any(_=>_.Chapter == null || _.Chapter.Transcoding))
+                //wait till everything is over
+                while (files.Any(_ => _.Chapter == null || (_.Chapter.Transcoding ?? false)))
                 {
                     await Task.Delay(5000);
-                    if (files.Any(_ => _.Chapter == null && (_.UploadTask?.IsCompletedSuccessfully ?? false) || _.Chapter != null && _.Chapter.Transcoding))
+                    //is tony empty and upload complete or anything transcoding
+                    if (files.Any(_ => (_.Chapter == null && (_.UploadTask?.IsCompletedSuccessfully ?? false)) || (_.Chapter != null && (_.Chapter.Transcoding ?? false))))
                     {
                         tonieinfo = await GetTonieInformation(job.Job.TonieIds);
-                        if (!(tonieinfo?.All(_ => _.Transcoding) ?? true))
+                        if (!(tonieinfo?.Any(_ => _.Transcoding) ?? true))
                         {
                             tonieinfo?.SelectMany(t => t.Chapters)
                             .ToList()
@@ -198,21 +215,32 @@ namespace TonieCreativeManager.Service
                                 var entry = files.FirstOrDefault(_ => _.MediaItem.Id == ch.Title);
                                 if (entry != null)
                                 {
-                                    if (ch.Seconds != entry.MediaItem.Duration && ch.Seconds != 0)
-                                        _MediaService.UpdateDuration(entry.MediaItem.Path, ch.Seconds).Wait();
+                                    if (ch.Seconds != entry.MediaItem.Duration && (ch.Seconds ?? 0) != 0)
+                                        _MediaService.UpdateDuration(entry.MediaItem.Path, ch.Seconds.Value).Wait();
                                     entry.Chapter = new Chapter { File = ch.File, Id = ch.Id, Seconds = ch.Seconds, Title = entry.MediaItem.Name };
                                 }
                             });
-                            tonieinfo?.SelectMany(t => t.TranscodingErrors?.Where(_ => _.Reason == "tooLong").SelectMany(_=>_.DeletedChapters))
+                            tonieinfo?.SelectMany(t => t.TranscodingErrors?.Where(_ => _.Reason == "tooLong").SelectMany(_ => _.DeletedChapters))
                                 .ToList()
                                 .ForEach(ch =>
                                 {
                                     var entry = files.FirstOrDefault(_ => _.MediaItem.Id == ch.Title);
                                     if (entry != null)
                                     {
-                                        if (ch.Seconds != entry.MediaItem.Duration && ch.Seconds != 0)
-                                            _MediaService.UpdateDuration(entry.MediaItem.Path, ch.Seconds).Wait();
+                                        if (ch.Seconds != entry.MediaItem.Duration && (ch.Seconds ?? 0) != 0)
+                                            _MediaService.UpdateDuration(entry.MediaItem.Path, ch.Seconds.Value).Wait();
                                         entry.Chapter = new Chapter { Seconds = ch.Seconds };
+                                    }
+                                });
+                            tonieinfo?.SelectMany(t => t.TranscodingErrors?.Where(_ => _.Reason != "tooLong").SelectMany(_ => _.DeletedChapters))
+                                .ToList()
+                                .ForEach(ch =>
+                                {
+                                    var entry = files.FirstOrDefault(_ => _.MediaItem.Id == ch.Title);
+                                    if (entry != null)
+                                    {
+                                        job.Job.Errors.Add($"{entry.MediaItem.Name} failed");
+                                        entry.Chapter = new Chapter { Title = ch.Title };
                                     }
                                 });
                             files.Where(entry => entry.Chapter == null
@@ -225,11 +253,11 @@ namespace TonieCreativeManager.Service
                                         Id = entry.UploadTask.Result.FileId,
                                         File = entry.UploadTask.Result.FileId,
                                         Title = entry.MediaItem.Id,
-                                        Seconds = (float) (entry.MediaItem.Duration ?? entry.MediaItem.ApproximateDuration ?? 0),
+                                        Seconds = (float)(entry.MediaItem.Duration ?? entry.MediaItem.ApproximateDuration ?? 0),
                                         Transcoding = true
                                     });
                             if (tonieinfo.Any(_ => _.TranscodingErrors?.Length > 0))
-                                System.Diagnostics.Debug.Write("xxx");
+                                System.Diagnostics.Debug.WriteLine("TranscodingError");
                             await PatchTonies(job, hh, files);
                             tonieinfo = await GetTonieInformation(job.Job.TonieIds);
                         }
@@ -249,10 +277,10 @@ namespace TonieCreativeManager.Service
 
                 job.Job.TonieIds.ToList().ForEach(_ => _RepositoryService.SetMapping(new PersistentData.TonieMapping { TonieId = _, Path = job.Job.Path }).Wait());
                 var user = (await _RepositoryService.GetUsers()).FirstOrDefault(_ => _.Id == job.Job.UserId);
-                user.History.Add(new PersistentData.History($"Tonies {string.Join(",",job.Job.TonieIds)} uploaded with {job.Job.Path}"));
+                user.History.Add(new PersistentData.History($"Tonies {string.Join(",", job.Job.TonieIds)} uploaded with {job.Job.Path}"));
                 await _RepositoryService.SetUser(user);
             }
-            catch(Exception ex)
+            catch (Exception ex)
             {
                 Console.WriteLine(ex);
                 foreach (var t in job.TonieInformation)

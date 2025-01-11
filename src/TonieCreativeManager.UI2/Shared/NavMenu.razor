@@ -1,6 +1,7 @@
 ﻿@inject PersistentData.User SelectedUser
 @inject UploadService UploadService
 @inject NavigationManager NavigationManager
+@inject ISnackbar _Snackbar
 <MudAppBar Fixed="true" Dense="true">
     <MudPaper Elevation="0" Class="d-flex flex-wrap" Width="100%">
     <MudPaper Elevation="0" Class="d-flex justify-space-around" Width="100%">
@@ -38,6 +39,9 @@
     {
         var progress = UploadService.GetProgress();
         _Progress = progress == null ? null : (int?)(progress * 100.0);
+        var errors = UploadService.GetErrors();
+        if (errors?.Length > 0)
+            _Snackbar.Add(string.Join("\n",errors), Severity.Error);
     }
 
     private async Task UpdateProgress()
