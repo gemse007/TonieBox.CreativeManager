@@ -18,7 +18,8 @@ services:
     environment: 
       - MEDIA_LIBRARY=/var/media
     volumes:
-      - $MEDIA_LIBRARY:/var/media
+      - /volume1/tonie/media:/var/media:ro
+      - /volume1/tonie/config.json:/app/config.json:rw
 
 # The commented out section below is an example of how to define a PostgreSQL
 # database that your application can use. `depends_on` tells Docker Compose to

@@ -55,7 +55,9 @@ namespace TonieCreativeManager.UI2
             Task.Run(async () =>
             {
                 var lib = Environment.GetEnvironmentVariable("MEDIA_LIBRARY");
+                var cfg = Environment.GetEnvironmentVariable("MEDIA_DATAFILE");
                 Console.WriteLine($"MEDIA_LIBRARY: {lib}");
+                Console.WriteLine($"MEDIA_DATAFILE: {lib}");
                 var settings = app.Services.GetService<Settings>() ?? new Settings();
                 if (!string.IsNullOrEmpty(lib))
                 {
@@ -64,7 +66,10 @@ namespace TonieCreativeManager.UI2
                 settings.LibraryRoot = settings.LibraryRoot?.TrimEnd('\\').TrimEnd('/');
                 if (settings.LibraryRoot != null)
                 {
-                    settings.RepositoryDataFile = Path.Combine(settings.LibraryRoot, settings.RepositoryDataFile ?? "data.json");
+                    if (!string.IsNullOrEmpty(cfg))
+                        settings.RepositoryDataFile = cfg;
+                    else
+                        settings.RepositoryDataFile = Path.Combine(settings.LibraryRoot, settings.RepositoryDataFile ?? "data.json");
                     Console.WriteLine($"Using LibraryRoot: {settings.LibraryRoot}");
                     Console.WriteLine($"Using Repository: {settings.RepositoryDataFile}");
                     await (app.Services.GetService<MediaService>()?.GetMediaItemAsync("") ?? Task.CompletedTask);

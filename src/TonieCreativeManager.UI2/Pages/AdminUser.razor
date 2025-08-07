@@ -13,13 +13,13 @@
         <MudText Typo="Typo.h4">Userinformation</MudText>
         @*<MudTextField @bind-Value="@UserItem.Id" Label="User ID" ReadOnly="true"/>*@
         <MudTextField @bind-Value="UserItem.Name" Label="User Name" />
-        <MudAvatar Image="@UserItem.ProfileImageUrl"/>
+        <MudAvatar><MudImage Src="@UserItem.ProfileImageUrl" /></MudAvatar>
         <MudTextField @bind-Value="UserItem.ProfileImageUrl" Label="Image" HelperText="Select Image from Tonies below or enter URL"/>
         <Grid Items="AllTonies" Size="50px"/>
         <MudNumericField @bind-Value="UserItem.Credits" Label="Credits"/>
         <MudNumericField @bind-Value="UserItem.UploadCost" Label="Upload Cost" HelperText="Credits to pay for one Tonie to upload"/>
         <MudNumericField @bind-Value="UserItem.MediaCost" Label="Media Cost" HelperText="Credits to pay for one Folder to buy"/>
-        <MudCheckBox @bind-Checked="UserItem.ShowText" Label="User can read -> Show Text"/>
+        <MudCheckBox @bind-Value="UserItem.ShowText" Label="User can read -> Show Text"/>
     </MudCardContent>
     <MudCardActions>
         <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="SaveUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save User</MudButton>
@@ -35,10 +35,10 @@
             <MudButton OnClick="SetAllToniesOwned" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set all as owned</MudButton> 
             <MudButton OnClick="SetNoTonieOwned" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set none as owned</MudButton> 
         <MudSpacer/> 
-        <MudRadioGroup @bind-SelectedOption="TonieFilter">
-            <MudRadio Option="0">Show all</MudRadio>
-            <MudRadio Option="1">Filter owned</MudRadio>
-            <MudRadio Option="2">Filter not owend</MudRadio>
+        <MudRadioGroup @bind-Value="TonieFilter">
+            <MudRadio Value="0">Show all</MudRadio>
+            <MudRadio Value="1">Filter owned</MudRadio>
+            <MudRadio Value="2">Filter not owend</MudRadio>
         </MudRadioGroup>
     </MudCardHeader>
     <MudCardContent>
@@ -59,11 +59,11 @@
             <MudButton OnClick="SetAllMediaAllowed" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set all as allowed</MudButton> 
             <MudButton OnClick="SetNoMediaAllowed" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Set none as allowed</MudButton> 
         <MudSpacer/> 
-        <MudRadioGroup @bind-SelectedOption="MediaFilter">
-            <MudRadio Option="0">All Media</MudRadio>
-            <MudRadio Option="1">Bought Media</MudRadio>
-            <MudRadio Option="2">Allowed Media</MudRadio>
-            <MudRadio Option="3">Not allowed Media</MudRadio>
+        <MudRadioGroup @bind-Value="MediaFilter">
+            <MudRadio Value="0">All Media</MudRadio>
+            <MudRadio Value="1">Bought Media</MudRadio>
+            <MudRadio Value="2">Allowed Media</MudRadio>
+            <MudRadio Value="3">Not allowed Media</MudRadio>
         </MudRadioGroup>
     </MudCardHeader>
     <MudCardContent>
