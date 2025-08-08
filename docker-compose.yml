@@ -17,6 +17,7 @@ services:
     env_file: .env
     environment: 
       - MEDIA_LIBRARY=/var/media
+      - MEDIA_DATAFILE=/app/config.json
     volumes:
       - /volume1/tonie/media:/var/media:ro
       - /volume1/tonie/config.json:/app/config.json:rw
