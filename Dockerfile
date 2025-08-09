@@ -60,8 +60,12 @@ RUN adduser \
     --uid "${UID}" \
     appuser
 
-RUN chown -R appuser /app && chmod -R 500 /app && chmod 700 /app
-
+# Create directories and set permissions
+RUN mkdir -p /var/media && \
+    chown -R appuser /app && \
+    chmod -R 755 /app
+	
 USER appuser
 
-ENTRYPOINT ["dotnet", "TonieCreativeManager.UI2.dll"]
+#ENTRYPOINT ["dotnet", "TonieCreativeManager.UI2.dll"]
+ENTRYPOINT ["sh", "-c", "echo 'Starting in 30 seconds... Press Ctrl+C to cancel' && sleep 30 && dotnet TonieCreativeManager.UI2.dll"]
