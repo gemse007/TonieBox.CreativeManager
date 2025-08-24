@@ -118,7 +118,9 @@ namespace TonieCloud
             var pageDocument = new HtmlDocument();
             pageDocument.LoadHtml(await response.Content.ReadAsStringAsync());
 
-            var loginUrl = new Uri(HttpUtility.HtmlDecode(pageDocument.GetElementbyId("root").Attributes["data-action-url"].Value));
+            //var loginUrl = new Uri(HttpUtility.HtmlDecode(pageDocument.GetElementbyId("root").Attributes["data-action-url"].Value));
+            var loginUrl = new Uri(HttpUtility.HtmlDecode(pageDocument.GetElementbyId("kc-form-login").Attributes["action"].Value));
+            
 
             // login
             var loginRequestData = new Dictionary<string, string>() {
