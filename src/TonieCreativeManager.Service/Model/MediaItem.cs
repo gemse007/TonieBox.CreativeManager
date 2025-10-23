@@ -63,6 +63,7 @@ namespace TonieCreativeManager.Service.Model
         }
         public void SetBougntByUser(PersistentData.User u)
         {
+            if (!u.AllowedMedia.Contains(Id)) u.AllowedMedia.Add(Id);
             if (!u.BoughtMedia.Contains(Id)) u.BoughtMedia.Add(Id);
         }
         public void SetAllowed(PersistentData.User u)

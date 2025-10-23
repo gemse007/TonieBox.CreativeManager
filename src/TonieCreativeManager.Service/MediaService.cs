@@ -18,6 +18,8 @@ namespace TonieCreativeManager.Service
         private readonly Settings _Settings;
         private readonly RepositoryService _RepositoryService;
         private Dictionary<string, MediaItem>? _Cache;
+        private Queue<(bool newItem, MediaItem item)> _ChangedDirectories = new Queue<(bool newItem, MediaItem item)>();
+        private Queue<MediaItem> _RemovedDirectories = new Queue<MediaItem>();
         private Task? _ReadItems;
         private Task? _ReadSubItems;
 
@@ -86,6 +88,29 @@ namespace TonieCreativeManager.Service
             }
             if (_Cache.ContainsKey(path) && _Cache[path].IsDirectory && await GetItemsAsync(_Cache[path]))
             {
+                while (_ChangedDirectories.Count > 0)
+                {
+                    var (newitem,item) = _ChangedDirectories.Dequeue();
+                    await GetItemsAsync(item);
+                    if (newitem)
+                        foreach (var user in await _RepositoryService.GetUsers() ?? new PersistentData.User[] { })
+                        {
+                            if (user.DefaultBought)
+                                item.SetBougntByUser(user);
+                            else if (user.DefaultAllowed)
+                                item.SetAllowed(user);
+                            await _RepositoryService.SetUser(user);
+                        }
+                }
+                while (_RemovedDirectories.Count > 0)
+                {
+                    var item = _RemovedDirectories.Dequeue();
+                    foreach (var user in await _RepositoryService.GetUsers() ?? new PersistentData.User[] { })
+                    {
+                        item.SetNotAllowed(user);
+                        await _RepositoryService.SetUser(user);
+                    }
+                }
                 await _RepositoryService.SetMediaItems(_Cache.Values.ToList());
             }
             if (_Cache.ContainsKey(path) && await CalculateApproximateDurationAsync(_Cache[path]))
@@ -127,25 +152,24 @@ namespace TonieCreativeManager.Service
                     var name = fileinfo.Name;
                     var subpath = Path.Combine(parent.Path, name);
 
-                    MediaItem? cached = null;
-                    if (_Cache.ContainsKey(subpath))
+                    if (_Cache.TryGetValue(subpath, out var cached) && cached.Parent == parent)
                     {
                         cached = _Cache[subpath];
                         if (cached.LastWriteTime == fileinfo.LastWriteTime && cached.TotalSize == fileinfo.Length)
                             return cached;
                     }
+                    else 
+                        cached = new MediaItem();
+
+                    cached.Parent = parent;
+                    cached.IsFile = true;
+                    cached.Path = subpath;
+                    cached.Name = name;
+                    cached.TotalSize = fileinfo.Length;
+                    cached.LastWriteTime = fileinfo.LastWriteTime;
+                    _Cache[subpath] = cached;
                     haschanged = true;
-                    var mi = new MediaItem(cached?.Id)
-                    {
-                        Parent = parent,
-                        IsFile = true,
-                        Path = subpath,
-                        Name = name,
-                        TotalSize = fileinfo.Length,
-                        LastWriteTime = fileinfo.LastWriteTime,
-                    };
-                    _Cache[subpath] = mi;
-                    return mi;
+                    return cached;
                 })
                 .OrderBy(p => p.Name)
                 .ToArray();
@@ -156,34 +180,36 @@ namespace TonieCreativeManager.Service
                     var dirinfo = new DirectoryInfo(subfullpath);
                     var name = dirinfo.Name;
                     var subpath = Path.Combine(parent.Path, name);
-                    MediaItem? cached = null;
-                    if (_Cache.ContainsKey(subpath))
+                    if (_Cache.TryGetValue(subpath, out var cached))
                     {
                         cached = _Cache[subpath];
                         if (cached.LastWriteTime == dirinfo.LastWriteTime)
                             return cached;
+                        _ChangedDirectories.Enqueue((false, cached));
                     }
+                    else
+                        _ChangedDirectories.Enqueue((true, cached = new MediaItem()));
+                    cached.Parent = parent;
+                    cached.Path = subpath;
+                    cached.Name = name;
+                    cached.LastWriteTime = dirinfo.LastWriteTime;
+                    _Cache[subpath] = cached;
                     haschanged = true;
-                    var mi = new MediaItem(cached?.Id)
-                    {
-                        Parent = parent,
-                        Path = subpath,
-                        Name = name,
-                        LastWriteTime = dirinfo.LastWriteTime,
-                    };
-                    _Cache[subpath] = mi;
-                    return mi;
+                    return cached;
                 })
                 .OrderBy(p => p.Name)
                 .ToArray();
+            //Remove deleted files from cache
             parent?.Childs?.Where(_=>_.IsFile && !files.Any(__=>__.Name == _.Name)).ToList().ForEach(_ => {
                 var subpath = Path.Combine(parent.Path, _.Name);
                 if (_Cache.ContainsKey(subpath)) _Cache.Remove(subpath);
                 haschanged = true;
             });
+            //Remove deleted directories from cache
             parent?.Childs?.Where(_ => _.IsDirectory && !directory.Any(__ => __.Name == _.Name)).ToList().ForEach(_ => {
                 var subpath = Path.Combine(parent.Path, _.Name);
                 if (_Cache.ContainsKey(subpath)) _Cache.Remove(subpath);
+                _RemovedDirectories.Enqueue(_); 
                 haschanged = true;
             });
             if (haschanged || parent.Childs == null)

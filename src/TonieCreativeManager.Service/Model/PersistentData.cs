@@ -30,6 +30,8 @@ namespace TonieCreativeManager.Service.Model
         }
         public class User
         {
+            private bool _DefaultBought = true;
+            private bool _DefaultAllowed = false;
             public void Clone(User cloneTo)
             {
                 cloneTo.Id = Id;
@@ -41,6 +43,8 @@ namespace TonieCreativeManager.Service.Model
                 cloneTo.ShowText = ShowText;
                 cloneTo.ShowHidden = ShowHidden;
                 cloneTo.Tonies = Tonies.ToList();
+                cloneTo._DefaultBought = _DefaultBought;
+                cloneTo._DefaultAllowed = _DefaultAllowed;
                 cloneTo.AllowedMedia = AllowedMedia.ToList();
                 cloneTo.BoughtMedia = BoughtMedia.ToList();
                 cloneTo.HiddenMedia = HiddenMedia.ToList();
@@ -54,6 +58,8 @@ namespace TonieCreativeManager.Service.Model
             public string? ProfileImageUrl { get; set; }
             public bool ShowText { get; set; }
             public bool ShowHidden { get; set; }
+            public bool DefaultBought { get => _DefaultBought; set { _DefaultBought = value; if (_DefaultBought) DefaultAllowed = false; } }
+            public bool DefaultAllowed { get => _DefaultAllowed; set { _DefaultAllowed = value; if (_DefaultAllowed) DefaultBought = false; } }
             public IList<string> Tonies { get; set; } = new List<string>();
             public IList<string> AllowedMedia { get; set; } = new List<string>();
             public IList<string> BoughtMedia { get; set; } = new List<string>();

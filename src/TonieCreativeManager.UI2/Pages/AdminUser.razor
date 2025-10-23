@@ -20,6 +20,8 @@
         <MudNumericField @bind-Value="UserItem.UploadCost" Label="Upload Cost" HelperText="Credits to pay for one Tonie to upload"/>
         <MudNumericField @bind-Value="UserItem.MediaCost" Label="Media Cost" HelperText="Credits to pay for one Folder to buy"/>
         <MudCheckBox @bind-Value="UserItem.ShowText" Label="User can read -> Show Text"/>
+        <MudCheckBox @bind-Value="UserItem.DefaultBought" Label="New Media is marked as bought" />
+        <MudCheckBox @bind-Value="UserItem.DefaultAllowed" Label="New Media is marked as allowed" />
     </MudCardContent>
     <MudCardActions>
         <MudButton StartIcon="@Icons.Material.Filled.Save" OnClick="SaveUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Save User</MudButton>
@@ -187,7 +189,16 @@
     public async void ChangeMediaPath(string path)
     {
         _Path = path;
+        var olduser = new PersistentData.User();
+        (await _RepositoryService.GetUsers()).First(_ => _.Id == UserItem.Id).Clone(olduser);
         _MediaItem = await _MediaService.GetMediaItemAsync(_Path);
+        var newuser = (await _RepositoryService.GetUsers()).First(_ => _.Id == UserItem.Id);
+        //if new Media Found -> User has new Bought / allowed
+        newuser.BoughtMedia.Except(olduser.BoughtMedia).ToList().ForEach(_ => UserItem.BoughtMedia.Add(_));
+        newuser.AllowedMedia.Except(olduser.AllowedMedia).ToList().ForEach(_ => UserItem.AllowedMedia.Add(_));
+        //if old Media Found -> User has removed Bought / allowed
+        olduser.BoughtMedia.Except(newuser.BoughtMedia).ToList().ForEach(_ => UserItem.BoughtMedia.Remove(_));
+        olduser.AllowedMedia.Except(newuser.AllowedMedia).ToList().ForEach(_ => UserItem.AllowedMedia.Remove(_));
         StateHasChanged();
     }
 
