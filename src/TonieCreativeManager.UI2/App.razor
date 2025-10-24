@@ -20,8 +20,8 @@
 </Router>
 
 @code {
-    [Parameter]
-    public InitialApplicationState InitialState { get; set; }
+        [Parameter]
+        public InitialApplicationState InitialState { get; set; }
 
     protected override void OnInitialized()
     {
@@ -40,12 +40,6 @@
                     NavigationManager.NavigateTo("/settings");
                     return true;
                 }
-                if (routeData.PageType != typeof(Pages.UserSelect))
-                    if (Users?.FirstOrDefault(_ => _.Id == InitialState.SelectedUser) == null)
-                    {
-                        NavigationManager.NavigateTo("/userselect");
-                        return true;
-                    }
             }
         }
         catch { }

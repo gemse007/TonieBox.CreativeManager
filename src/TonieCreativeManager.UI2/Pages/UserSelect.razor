@@ -17,7 +17,7 @@
     {
         if (firstRender)
         {
-            _Users = (await _RepositoryService.GetUsers()).Where(_=>_.HouseholdId == household || string.IsNullOrEmpty(household)) ?? new PersistentData.User[] { };
+            _Users = (await _RepositoryService.GetUsers())?.Where(_=>_.HouseholdId == household) ?? new PersistentData.User[] { };
 
             StateHasChanged();
         }
