@@ -28,12 +28,12 @@
             bool loggedin = false;
             try
             {
-                var h = await _TonieCloudService.GetHouseholds();
-                loggedin = h?.Count() > 0;
-                var hfound = h?.Any(_ => _.Id == household) ?? false;
-
-                if (hfound || (h?.Any(_=>_.Id == SelectedUser?.HouseholdId) ?? false) || h?.Count() == 1)
-                    _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 ? $"/userselect/{SelectedUser?.HouseholdId ?? h?.FirstOrDefault()?.Id}" : "/media", true);
+                var households = await _TonieCloudService.GetHouseholds();
+                loggedin = households?.Count() > 0;
+                var householdId = households?.Count() == 1 ? households.First().Id : string.IsNullOrEmpty(household) ? SelectedUser?.HouseholdId : household;
+                var h = households?.FirstOrDefault(_ => _.Id == householdId);
+                if (h != null)
+                    _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 ? $"/userselect/{householdId}" : "/media", true);
                 else
                     _Snackbar.Add("Please Provide HouseHoldID!");
             }
