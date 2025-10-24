@@ -30,11 +30,12 @@ namespace TonieCreativeManager.Service.Model
         }
         public class User
         {
-            private bool _DefaultBought = true;
+            private bool _DefaultBought = false;
             private bool _DefaultAllowed = false;
             public void Clone(User cloneTo)
             {
                 cloneTo.Id = Id;
+                cloneTo.HouseholdId = HouseholdId;
                 cloneTo.Name = Name;
                 cloneTo.Credits = Credits;
                 cloneTo.MediaCost = MediaCost;
@@ -51,6 +52,7 @@ namespace TonieCreativeManager.Service.Model
                 cloneTo.History = History.ToList();
             }
             public int Id { get; set; } = 0;
+            public string? HouseholdId { get; set; }
             public string? Name { get; set; }
             public int Credits { get; set; }
             public int MediaCost { get; set; }

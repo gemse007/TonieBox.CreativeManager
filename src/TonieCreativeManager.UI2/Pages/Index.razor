@@ -1,4 +1,5 @@
 ﻿@page "/"
+@page "/{household}"
 @inject TonieCloudService _TonieCloudService
 @inject NavigationManager _NavigationManager
 @inject IEnumerable<PersistentData.User> Users
@@ -13,6 +14,7 @@
 </MudCard>
 
 @code {
+    [Parameter] public string? household { get; set; }
 
     protected override async void OnAfterRender(bool firstRender)
     {
@@ -28,15 +30,19 @@
             {
                 var h = await _TonieCloudService.GetHouseholds();
                 loggedin = h?.Count() > 0;
+                var hfound = h?.Any(_ => _.Id == household) ?? false;
+
+                if (hfound || (h?.Any(_=>_.Id == SelectedUser?.HouseholdId) ?? false) || h?.Count() == 1)
+                    _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 ? $"/userselect/{SelectedUser?.HouseholdId ?? h?.FirstOrDefault()?.Id}" : "/media", true);
+                else
+                    _Snackbar.Add("Please Provide HouseHoldID!");
             }
             catch { }
             if (!loggedin)
             {
                 _Snackbar.Add("Login to MyTonieCloud didn't work -> check your credentials!");
-                _NavigationManager.NavigateTo("/settings", true);
+                //_NavigationManager.NavigateTo("/settings", true);
             }
-            else
-                _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 ? "/userselect" : "/media", true);
             return;
         }
     }

@@ -11,7 +11,7 @@
             <MudBadge Content="@SelectedUser?.Credits" Color="Color.Primary" Overlap="true" Origin="Origin.CenterRight" Visible="SelectedUser?.Id != 0">
                 <MudIconButton Href="/voucher" Icon="fas fa-coins"  Color="Color.Primary"/>
             </MudBadge>
-            <MudButton Href="/userselect"><MudAvatar Color="Color.Primary"><MudImage Src="@SelectedUser?.ProfileImageUrl" /></MudAvatar></MudButton>
+            <MudButton Href="@("/userselect" + (SelectedUser == null ? "" : "/" + SelectedUser.HouseholdId))"><MudAvatar Color="Color.Primary"><MudImage Src="@SelectedUser?.ProfileImageUrl" /></MudAvatar></MudButton>
             @*<MudIconButton Href="/settings" Icon="fas fa-compact-disc" />*@
             <MudCheckBox Disabled="@(SelectedUser.Id == 0)" @bind-Value="@ManageHiddenFolders" CheckedIcon="@Icons.Material.Filled.Favorite" UncheckedIcon="@Icons.Material.Filled.FavoriteBorder" />
     </MudPaper>

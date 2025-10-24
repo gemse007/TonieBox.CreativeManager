@@ -13,6 +13,11 @@
         <MudText Typo="Typo.h4">Userinformation</MudText>
         @*<MudTextField @bind-Value="@UserItem.Id" Label="User ID" ReadOnly="true"/>*@
         <MudTextField @bind-Value="UserItem.Name" Label="User Name" />
+        <MudSelect @bind-Value="UserItem.HouseholdId" Label="Household" Dense="true">
+            @foreach (var h in _Households){
+                <MudSelectItem Value="@h.Id">@h.Name</MudSelectItem>
+            }
+        </MudSelect>
         <MudAvatar><MudImage Src="@UserItem.ProfileImageUrl" /></MudAvatar>
         <MudTextField @bind-Value="UserItem.ProfileImageUrl" Label="Image" HelperText="Select Image from Tonies below or enter URL"/>
         <Grid Items="AllTonies" Size="50px"/>
@@ -82,9 +87,10 @@
     private int _TonieFilter = 0;
     private int _MediaFilter = 0;
     private int _MediaTodo = 0;
-    private IEnumerable<PersistentData.User> Users { get; set; } = new PersistentData.User[] { };
-    private PersistentData.User UserItem { get; set; } = new PersistentData.User();
-    private IEnumerable<TonieCloud.CreativeTonie> _Tonies { get; set; } = new TonieCloud.CreativeTonie[] { };
+    private IEnumerable<TonieCloud.Household> _Households { get; set; } = [];
+    private IEnumerable<PersistentData.User> Users { get; set; } = [];
+    private PersistentData.User UserItem { get; set; } = new();
+    private IEnumerable<TonieCloud.CreativeTonie> _Tonies { get; set; } = [];
     [Parameter] public string? ID { get; set; }
     private int TonieFilter { get => _TonieFilter; set { _TonieFilter = value; StateHasChanged(); } }
     private int MediaFilter { get => _MediaFilter; set { _MediaFilter = value; StateHasChanged(); } }
@@ -101,7 +107,9 @@
             int.TryParse(ID, out id);
             Users.FirstOrDefault(_ => _.Id == id)?.Clone(UserItem);
             if (UserItem.Id == 0) UserItem.Id = id;
-            _Tonies = await _TonieCloudService.GetCreativeTonies() ?? new TonieCloud.CreativeTonie[] { };
+            _Households = await _TonieCloudService.GetHouseholds() ?? [];
+            if (string.IsNullOrEmpty(UserItem.HouseholdId)) UserItem.HouseholdId = _Households.FirstOrDefault()?.Id ?? "";
+            _Tonies = await _TonieCloudService.GetCreativeTonies(UserItem.HouseholdId) ?? new TonieCloud.CreativeTonie[] { };
             _MediaItem = await _MediaService.GetMediaItemAsync(_Path);
             StateHasChanged();
         }

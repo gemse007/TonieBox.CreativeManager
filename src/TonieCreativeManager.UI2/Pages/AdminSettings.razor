@@ -21,6 +21,20 @@
 </MudCard>
 <MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
     <MudCardHeader>
+        <MudText Typo="Typo.h4">Households</MudText>
+    </MudCardHeader>
+    <MudCardContent>
+        @foreach(var hh in _Households)
+        {
+            <MudLink Href="@($"/{hh.Id}")" Class="d-block mb-2">@hh.Name</MudLink>
+        }
+    </MudCardContent>
+    <MudCardActions>
+        <MudButton StartIcon="@Icons.Material.Filled.Add" OnClick="AddUser" Color="Color.Primary" Variant="Variant.Filled" Class="mx-2">Add User</MudButton>
+    </MudCardActions>
+</MudCard>
+<MudCard Class="ma-sx-1 ma-lg-16" Elevation="5">
+    <MudCardHeader>
         <MudText Typo="Typo.h4">Users</MudText>
     </MudCardHeader>
     <MudCardContent>
@@ -70,6 +84,7 @@
 
 @code {
     private IEnumerable<PersistentData.User>? _Users = null;
+    private IEnumerable<TonieCloud.Household> _Households { get; set; } = [];
     private IEnumerable<PersistentData.Voucher> _Vouchers = new PersistentData.Voucher[] { };
     private PersistentData.Voucher _Voucher = new PersistentData.Voucher() { Value = 5 };
     private List<PersistentData.Voucher> _ChangedVouchers = new List<PersistentData.Voucher>();
@@ -91,12 +106,25 @@
             Users = _Users
                 .Select(_ => new GridItem { ImageUrl = _.ProfileImageUrl, Name = _.Name, Url = $"/settings/user/{_.Id}" })
                 .ToArray();
+            await LoadHouseholds();
             StateHasChanged();
         }
         await base.OnAfterRenderAsync(firstRender);
     }
     private async Task LoadVouchers() => _Vouchers = (await _RepositoryService.GetVouchers())?.OrderBy(_ => _.Used).ToArray() ?? new PersistentData.Voucher[] { };
+
     public IEnumerable<GridItem> Users { get; set; } = new GridItem[] { };
+
+    private async Task LoadHouseholds()
+    {
+        if (string.IsNullOrEmpty(Username) || string.IsNullOrEmpty(Password))
+            return;
+        var login = new Login(Username, Password);
+        var tc = new TonieCloudClient(login, 1);
+
+        _Households = await tc.GetHouseholds() ?? [];
+        StateHasChanged();
+    }
 
     public async void saveLogin()
     {

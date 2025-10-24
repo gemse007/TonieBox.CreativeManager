@@ -1,4 +1,5 @@
 ﻿@page "/userselect"
+@page "/userselect/{household}"
 
 @inject RepositoryService _RepositoryService
 @inject NavigationManager _NavigationManager
@@ -9,13 +10,15 @@
 <Grid Items="Users" Size="290px" ShowText="true"/>
 
 @code {
+    [Parameter] public string? household { get; set; }
     private IEnumerable<PersistentData.User> _Users { get; set; } = new PersistentData.User[] { };
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
-            _Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
+            _Users = (await _RepositoryService.GetUsers()).Where(_=>_.HouseholdId == household || string.IsNullOrEmpty(household)) ?? new PersistentData.User[] { };
+
             StateHasChanged();
         }
         await base.OnAfterRenderAsync(firstRender);
