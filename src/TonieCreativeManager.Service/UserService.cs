@@ -106,20 +106,20 @@ namespace TonieCreativeManager.Service
         {
             if (_ToniesCacheUntil > DateTime.UtcNow) return _Tonies;
             _ToniesCacheUntil = DateTime.UtcNow.AddHours(1);
-            var hh = (await _TonieCloudClient.GetHouseholds())?.FirstOrDefault();
-            if (hh != null)
+            var hh = await _TonieCloudClient.GetHouseholds() ?? new Household[] { };
+            var toniesList = new List<Tonie>();
+            foreach (var h in hh)
             {
-                var tonies = await _TonieCloudClient.GetCreativeTonies(hh.Id);
+                var tonies = await _TonieCloudClient.GetCreativeTonies(h.Id);
                 var map = await _RepositoryService.GetMappings();
-                _Tonies = tonies?.Select(ct => new Tonie(ct.Id)
+                toniesList.AddRange(tonies?.Select(ct => new Tonie(ct.Id)
                 {
                     ImageUrl = ct.ImageUrl,
                     Name = ct.Name,
                     CurrentMediaPath = map?.FirstOrDefault(m => m.TonieId == ct.Id)?.Path
-                }).ToArray();
+                }).ToArray() ?? new Tonie[] { });
             }
-            else
-                _Tonies = null;
+            _Tonies = toniesList.ToArray();
             return _Tonies;
         }
 
