@@ -26,7 +26,7 @@ namespace TonieCreativeManager.Service
             public UploadJob Job { get; set; }
             public long TotalBytes { get; set; }
             public long ByesDone { get; set; }
-            public TonieCloud.CreativeTonie[]? TonieInformation { get; set; }
+            public CreativeTonie[]? TonieInformation { get; set; }
         }
         private class TonieChapterDetails
         {
@@ -94,11 +94,6 @@ namespace TonieCreativeManager.Service
                 }
                 try
                 {
-                    var hh = (await _TonieCloudService.GetHousehold()).Id;
-                    //job.TonieInformation = job.Job.TonieIds
-                    //    .Select(async _ => await _TonieCloudClient.GetCreativeTonie(hh, _))
-                    //    .Select(_=>_.Result)
-                    //    .ToArray();
                     job.TonieInformation = await GetTonieInformation(job.Job.TonieIds);
                     if (job.TonieInformation == null) throw new Exception("Error -> UploadFileAsync invalid Tonie!");
                     await UploadFilesAsync(job);
@@ -119,13 +114,14 @@ namespace TonieCreativeManager.Service
         }
         private async Task<CreativeTonie[]> GetTonieInformation(string[] tonieIds)
         {
-            var hh = (await _TonieCloudService.GetHousehold()).Id;
+            var alltonies = await _TonieCloudService.GetTonieHouseholds();
+
             var list = new List<CreativeTonie>();
             foreach (var t in tonieIds)
-                list.Add(await _TonieCloudClient.GetCreativeTonie(hh, t));
+                list.Add(await _TonieCloudClient.GetCreativeTonie(alltonies[t], t));
             return list.ToArray();
         }
-        private async Task PatchTonies(UploadJobProgress job, string hh, TonieChapterDetails[] files)
+        private async Task PatchTonies(UploadJobProgress job, Dictionary<string,string> hh, TonieChapterDetails[] files)
         {
             int ix = 0;
             foreach (var t in job.TonieInformation)
@@ -146,14 +142,14 @@ namespace TonieCreativeManager.Service
                     chr--;
                     ix++;
                 }
-                await _TonieCloudClient.PatchCreativeTonie(hh, t.Id, job.Job.Name, chap);
+                await _TonieCloudClient.PatchCreativeTonie(hh[t.Id!], t.Id!, job.Job.Name, chap);
             }
             if (ix < files.Length)
                 throw new Exception("Zuwenige Tonies spezifiziert!");
         }
         private async Task UploadFilesAsync(UploadJobProgress job)
         {
-            var hh = (await _TonieCloudService.GetHousehold()).Id;
+            var hh = await _TonieCloudService.GetTonieHouseholds();
             try
             {
                 var files = job.Job.Files.Select(_ =>
@@ -284,7 +280,7 @@ namespace TonieCreativeManager.Service
             {
                 Console.WriteLine(ex);
                 foreach (var t in job.TonieInformation)
-                    await _TonieCloudClient.PatchCreativeTonie(hh, t.Id, t.Name, t.Chapters);
+                    await _TonieCloudClient.PatchCreativeTonie(hh[t.Id], t.Id, t.Name, t.Chapters);
                 var user = (await _RepositoryService.GetUsers()).FirstOrDefault(_ => _.Id == job.Job.UserId);
                 user.Credits += user.UploadCost * job.TonieInformation.Length;
                 await _RepositoryService.SetUser(user);

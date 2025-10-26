@@ -33,7 +33,7 @@
                 var householdId = households?.Count() == 1 ? households.First().Id : string.IsNullOrEmpty(household) ? SelectedUser?.HouseholdId : household;
                 var h = households?.FirstOrDefault(_ => _.Id == householdId);
                 if (h != null)
-                    _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 ? $"/userselect/{householdId}" : "/media", true);
+                    _NavigationManager.NavigateTo((SelectedUser?.Id ?? 0) == 0 || SelectedUser?.HouseholdId != household ? $"/userselect/{householdId}" : "/media", true);
                 else
                     _Snackbar.Add("Please Provide HouseHoldID!");
             }
