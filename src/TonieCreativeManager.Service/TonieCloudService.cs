@@ -23,14 +23,18 @@ namespace TonieCreativeManager.Service
         }
 
         private Dictionary<string, IEnumerable<CreativeTonie>?> _CreativeTonies = new Dictionary<string, IEnumerable<CreativeTonie>?>();
+        private DateTime Refresh { get; set; }
         private IEnumerable<Household>? _Households;
 
         public async Task<IEnumerable<Household>?> GetHouseholds() => _Households ??= await _Client.GetHouseholds();
 
         public async Task<IEnumerable<CreativeTonie>?> GetCreativeTonies(string householdId)
         {
-            if (!_CreativeTonies.TryGetValue(householdId, out var creativeTonies))
+            if (DateTime.Now >= Refresh || !_CreativeTonies.TryGetValue(householdId, out var creativeTonies))
+            {
+                Refresh = DateTime.Now.AddMinutes(1);
                 _CreativeTonies[householdId] = creativeTonies = await _Client.GetCreativeTonies(householdId);
+            }
             return creativeTonies;
         }
 
