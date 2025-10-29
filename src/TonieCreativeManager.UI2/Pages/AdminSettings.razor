@@ -98,16 +98,36 @@
     {
         if (firstRender)
         {
-            var settings = await _RepositoryService.GetGeneralSettings();
-            Username = settings?.TonieUserID ?? "";
-            Password = settings?.ToniePassword ?? "";
-            _Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
-            await LoadVouchers();
-            Users = _Users
-                .Select(_ => new GridItem { ImageUrl = _.ProfileImageUrl, Name = _.Name, Url = $"/settings/user/{_.Id}" })
-                .ToArray();
-            await LoadHouseholds();
-            StateHasChanged();
+            try
+            {
+                var settings = await _RepositoryService.GetGeneralSettings();
+                Username = settings?.TonieUserID ?? "";
+                Password = settings?.ToniePassword ?? "";
+                _Users = await _RepositoryService.GetUsers() ?? new PersistentData.User[] { };
+                await LoadVouchers();
+                Users = _Users
+                    .Select(_ => new GridItem { ImageUrl = _.ProfileImageUrl, Name = _.Name, Url = $"/settings/user/{_.Id}" })
+                    .ToArray();
+                await LoadHouseholds();
+                foreach(var h in _Households)
+                {
+                    var t = await _TonieCloudClient.GetCreativeTonies(h.Id ?? "") ?? [];
+                    foreach(var u in _Users.Where(_ => _.HouseholdId == h.Id))
+                    {
+                        var ut = u.Tonies.Where(ut => t.Any(_=>_.Id == ut)).ToList();
+                        if (ut.Count != u.Tonies.Count)
+                        {
+                            u.Tonies = ut;
+                            await _RepositoryService.SetUser(u);
+                        }
+                    }
+                }
+                StateHasChanged();
+            }
+            catch(Exception ex)
+            {
+                _Snackbar.Add(ex.Message);
+            }
         }
         await base.OnAfterRenderAsync(firstRender);
     }

@@ -17,8 +17,6 @@
 
             while (!stoppingToken.IsCancellationRequested)
             {
-                Logger.LogInformation("ServiceA is doing background work.");
-
                 await Task.Delay(TimeSpan.FromSeconds(5), stoppingToken);
             }
 

@@ -18,7 +18,7 @@
     @if (_Progress != null)
     {
         <MudPaper Elevation="0" Class="d-flex" Width="100%">
-                <MudProgressLinear Min="0" Max="100" Value="_Progress.Value" />
+                <MudProgressLinear Min="0" Max="100" Value="_Progress.Value" onclick="@(()=>ShowProgress())"/>
         </MudPaper>
     }
     </MudPaper>
@@ -52,5 +52,10 @@
             GetProgress();
             StateHasChanged();
         }
+    }
+
+    private void ShowProgress()
+    {
+        _Snackbar.Add(UploadService.Status());
     }
 }

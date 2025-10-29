@@ -2,6 +2,7 @@
 using System;
 using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
+using System.Dynamic;
 using System.IO;
 using System.IO.Enumeration;
 using System.Linq;
@@ -27,6 +28,7 @@ namespace TonieCreativeManager.Service
             public long TotalBytes { get; set; }
             public long ByesDone { get; set; }
             public CreativeTonie[]? TonieInformation { get; set; }
+            public DateTime Started { get; set; }
         }
         private class TonieChapterDetails
         {
@@ -56,6 +58,11 @@ namespace TonieCreativeManager.Service
         {
             if (_Jobs.Count == 0) return null;
             return 1.0 * _Jobs.Sum(_ => _.ByesDone) / _Jobs.Sum(_ => _.TotalBytes);
+        }
+        public string Status()
+        {
+            return string.Join("/", 
+                _Jobs.Select(_ => _.Job.Path + " to " + string.Join("/", _.Job.TonieIds)));
         }
         public string[] GetErrors()
         {
@@ -94,6 +101,7 @@ namespace TonieCreativeManager.Service
                 }
                 try
                 {
+                    job.Started = DateTime.Now;
                     job.TonieInformation = await GetTonieInformation(job.Job.TonieIds);
                     if (job.TonieInformation == null) throw new Exception("Error -> UploadFileAsync invalid Tonie!");
                     await UploadFilesAsync(job);
@@ -197,6 +205,8 @@ namespace TonieCreativeManager.Service
                 //wait till everything is over
                 while (files.Any(_ => _.Chapter == null || (_.Chapter.Transcoding ?? false)))
                 {
+                    if (DateTime.Now.Subtract(job.Started).TotalMinutes > 5 * (job.TonieInformation?.Length ?? 1))
+                        throw new Exception("Times up / abort!");
                     await Task.Delay(5000);
                     //is tony empty and upload complete or anything transcoding
                     if (files.Any(_ => (_.Chapter == null && (_.UploadTask?.IsCompletedSuccessfully ?? false)) || (_.Chapter != null && (_.Chapter.Transcoding ?? false))))
@@ -283,6 +293,7 @@ namespace TonieCreativeManager.Service
                     await _TonieCloudClient.PatchCreativeTonie(hh[t.Id], t.Id, t.Name, t.Chapters);
                 var user = (await _RepositoryService.GetUsers()).FirstOrDefault(_ => _.Id == job.Job.UserId);
                 user.Credits += user.UploadCost * job.TonieInformation.Length;
+                user.History.Add(new History($"Fehler beim Upload: {job.Job.Path} to {string.Join(",", job.Job.TonieIds)} Fehler:{ex.Message}\n{ex.StackTrace}"));
                 await _RepositoryService.SetUser(user);
             }
         }
